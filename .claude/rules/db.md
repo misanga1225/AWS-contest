@@ -1,0 +1,26 @@
+---
+paths:
+  - backend/migrations/**
+  - backend/src/models/**
+---
+
+- DB は Turso (libSQL / SQLite互換)。PostgreSQL固有の構文は使えない
+- 以下のPostgreSQL構文はエラーになる。代替手段を使うこと:
+  - SERIAL / BIGSERIAL → INTEGER PRIMARY KEY（自動採番）
+  - ENUM型 → TEXT + CHECK制約
+  - BOOLEAN → INTEGER (0/1)
+  - NOW() → datetime('now')
+  - RETURNING句 → INSERT後に SELECT last_insert_rowid() で取得
+  - ILIKE → LIKE（SQLiteのLIKEはデフォルトでcase-insensitive）
+  - UUID型 → TEXT として格納
+  - JSONB → TEXT として格納し、アプリ側でserde_jsonでパースする
+  - 配列型 → 別テーブルに正規化する
+- ALTER TABLE で既存カラムの型変更・リネームはできない。新テーブル作成 + データ移行で対応する
+- ALTER TABLE で NOT NULL 制約の追加・削除もできない
+- スキーマ変更は必ず sqlx migrate add で新規マイグレーションを作成する
+- マイグレーションは冪等であること（IF NOT EXISTS / IF EXISTS を使う）
+- DOWN マイグレーション（ロールバック）も必ず書く
+- NOT NULL カラムには DEFAULT を必ずセットする（既存行の破壊防止）
+- テーブル名はスネークケース複数形（users, task_items）
+- created_at, updated_at カラムは全テーブルに必須。型は TEXT、DEFAULT は datetime('now')
+- 本番データに対する DELETE / DROP は禁止。論理削除（deleted_at）を使う
