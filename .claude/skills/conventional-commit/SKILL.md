@@ -26,11 +26,12 @@ description: |
 - ci: CI/CD設定
 
 ## scope（任意）
-- backend, frontend, db, ci, config
+- backend, frontend, infra, domain, api, summarizer, ci, config
 
 ## ルール
 - subject は50文字以内、命令形、末尾ピリオドなし
 - body は変更の「なぜ」を書く（「何を」はdiffでわかる）
 - 複数の種類の変更を1コミットにまとめない
-- マイグレーションとモデル変更は同じコミットに入れてよい
+- CDKのリソース変更と、それに依存するアプリコード変更は同じコミットに入れてよい
+- domain の型変更と、それに追随する api / summarizer の変更は同じコミットに入れてよい
 - breaking change があれば本文に `BREAKING CHANGE:` を入れる

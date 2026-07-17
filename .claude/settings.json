@@ -7,11 +7,15 @@
       "Bash(cargo fmt:*)",
       "Bash(cargo check:*)",
       "Bash(cargo run:*)",
+      "Bash(cargo lambda build:*)",
+      "Bash(cargo lambda watch:*)",
       "Bash(npm run:*)",
       "Bash(npx vitest:*)",
       "Bash(npx tsc:*)",
       "Bash(npx eslint:*)",
-      "Bash(sqlx migrate:*)",
+      "Bash(npx cdk synth:*)",
+      "Bash(npx cdk diff:*)",
+      "Bash(npx cdk ls:*)",
       "Bash(git status)",
       "Bash(git diff:*)",
       "Bash(git log:*)",
@@ -32,7 +36,10 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(npm install:*)",
-      "Bash(cargo add:*)"
+      "Bash(cargo add:*)",
+      "Bash(npx cdk deploy:*)",
+      "Bash(npx cdk bootstrap:*)",
+      "Bash(aws:*)"
     ],
     "deny": [
       "Read(.env)",
@@ -40,7 +47,10 @@
       "Read(secrets/**)",
       "Bash(rm -rf:*)",
       "Bash(curl:*)",
-      "Bash(wget:*)"
+      "Bash(wget:*)",
+      "Bash(npx cdk destroy:*)",
+      "Bash(aws dynamodb delete-table:*)",
+      "Bash(aws s3 rb:*)"
     ]
   },
   "hooks": {
@@ -50,7 +60,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "FILE=$(echo $CLAUDE_TOOL_INPUT | jq -r '.file_path // .path // \"\"'); case \"$FILE\" in *.rs) cd backend 2>/dev/null && cargo check --message-format=short 2>&1 | head -15 ;; *.ts|*.tsx) cd frontend 2>/dev/null && npx tsc --noEmit --pretty false 2>&1 | head -15 ;; *) exit 0 ;; esac"
+            "command": "node .claude/hooks/post-edit-check.mjs"
           }
         ]
       }
@@ -60,7 +70,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "INPUT=$(cat); if [ \"$(echo $INPUT | jq -r '.stop_hook_active')\" = 'true' ]; then exit 0; fi; FAIL=0; if [ -d backend/src ]; then cd backend && cargo test --quiet 2>&1 | tail -20; [ $? -ne 0 ] && FAIL=1; cargo clippy --quiet -- -D warnings 2>&1 | tail -10; [ $? -ne 0 ] && FAIL=1; cd ..; fi; if [ -d frontend/src ]; then cd frontend && npx vitest run --reporter=verbose 2>&1 | tail -20; [ $? -ne 0 ] && FAIL=1; npx tsc --noEmit --pretty false 2>&1 | tail -10; [ $? -ne 0 ] && FAIL=1; cd ..; fi; [ $FAIL -ne 0 ] && exit 2 || exit 0"
+            "command": "node .claude/hooks/stop-check.mjs"
           }
         ]
       }
@@ -71,7 +81,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "COMMAND=$(echo $CLAUDE_TOOL_INPUT | jq -r '.command'); if echo \"$COMMAND\" | grep -qE 'rm\\s+-rf|DROP\\s+DATABASE|DROP\\s+TABLE'; then echo 'BLOCKED: destructive command detected'; exit 2; fi; exit 0"
+            "command": "node .claude/hooks/pre-bash-guard.mjs"
           }
         ]
       }

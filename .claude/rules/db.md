@@ -1,26 +1,36 @@
 ---
 paths:
-  - backend/migrations/**
-  - backend/src/models/**
+  - backend/**
+  - infra/lib/**
 ---
 
-- DB は Turso (libSQL / SQLite互換)。PostgreSQL固有の構文は使えない
-- 以下のPostgreSQL構文はエラーになる。代替手段を使うこと:
-  - SERIAL / BIGSERIAL → INTEGER PRIMARY KEY（自動採番）
-  - ENUM型 → TEXT + CHECK制約
-  - BOOLEAN → INTEGER (0/1)
-  - NOW() → datetime('now')
-  - RETURNING句 → INSERT後に SELECT last_insert_rowid() で取得
-  - ILIKE → LIKE（SQLiteのLIKEはデフォルトでcase-insensitive）
-  - UUID型 → TEXT として格納
-  - JSONB → TEXT として格納し、アプリ側でserde_jsonでパースする
-  - 配列型 → 別テーブルに正規化する
-- ALTER TABLE で既存カラムの型変更・リネームはできない。新テーブル作成 + データ移行で対応する
-- ALTER TABLE で NOT NULL 制約の追加・削除もできない
-- スキーマ変更は必ず sqlx migrate add で新規マイグレーションを作成する
-- マイグレーションは冪等であること（IF NOT EXISTS / IF EXISTS を使う）
-- DOWN マイグレーション（ロールバック）も必ず書く
-- NOT NULL カラムには DEFAULT を必ずセットする（既存行の破壊防止）
-- テーブル名はスネークケース複数形（users, task_items）
-- created_at, updated_at カラムは全テーブルに必須。型は TEXT、DEFAULT は datetime('now')
-- 本番データに対する DELETE / DROP は禁止。論理削除（deleted_at）を使う
+# DynamoDB 単一テーブル設計規約
+
+- DB は DynamoDB 単一テーブル（オンデマンド課金）。テーブル・GSI定義は infra/ の CDK でのみ管理する
+- コンソール・CLI (`aws dynamodb create-table` / `update-table` 等) での手動変更は禁止
+
+## キー設計
+
+| エンティティ | PK | SK |
+|---|---|---|
+| ケア記録 | `FLOOR#{floor}` | `RECORD#{timestamp}#{id}` |
+| 利用者 | `FLOOR#{floor}` | `RESIDENT#{id}` |
+| サマリ | `FLOOR#{floor}` | `SUMMARY#{date}#{shift}` |
+
+- GSI は1本のみ（利用者別時系列: PK=`RESIDENT#{id}`, SK=`RECORD#{timestamp}`）。GSIの追加はユーザーの承認を得てから
+- SKプレフィックス（`RECORD#` / `RESIDENT#` / `SUMMARY#`）で `begins_with` クエリする。Scan は禁止（デモデータ初期化を除く）
+
+## スキーマ進化（DynamoDBにマイグレーションは無い）
+
+- 全エンティティに schema_version 属性を持たせる。構造を変えたらインクリメントする
+- フィールド追加は domain クレートで `#[serde(default)]` を付け、旧アイテムを読めるようにする
+- 既存属性のリネーム・型変更・削除は禁止。新属性を追加し、読み取り側で両対応する
+- 既存アイテムの一括書き換え（バックフィル）はしない。読み取り時に吸収する
+
+## データ規約
+
+- タイムスタンプは ISO 8601 / RFC 3339 のUTC文字列（例: `2026-07-17T09:00:00Z`）。SKのソート順がこれに依存する
+- id は ULID（時系列ソート可能）
+- 承認済み記録の物理削除・上書きは禁止。訂正は新規記録として追加する
+- サマリ生成後に承認された記録の「追記」判定は、読み取り時に `approved_at > summary.generated_at` のクエリで行う。記録側にフラグは持たせない
+- 記録には原文 (original_text)・言語コード (lang)・根拠として参照可能な id を必ず保持する
