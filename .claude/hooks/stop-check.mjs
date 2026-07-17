@@ -2,6 +2,12 @@
 // stdin: {"stop_hook_active": bool, ...} 形式のJSON。無限ループ防止のため stop_hook_active 時は即終了。
 import { readFileSync, existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+
+// フックはセッションの現在ディレクトリで実行されるため、
+// スクリプト自身の位置からプロジェクトルートを特定して移動する
+process.chdir(resolve(dirname(fileURLToPath(import.meta.url)), "..", ".."));
 
 try {
   const j = JSON.parse(readFileSync(0, "utf8"));
@@ -25,8 +31,9 @@ if (existsSync("backend/Cargo.toml")) {
   results.push(run("cargo clippy", "cargo clippy --quiet -- -D warnings", "backend", 10));
 }
 if (existsSync("frontend/src")) {
-  results.push(run("vitest", "npx vitest run --reporter=basic", "frontend", 20));
-  results.push(run("tsc (frontend)", "npx tsc --noEmit --pretty false", "frontend", 10));
+  results.push(run("vitest", "npx vitest run --passWithNoTests", "frontend", 20));
+  // viteテンプレートはproject references構成のため -b で全プロジェクトを検査する
+  results.push(run("tsc (frontend)", "npx tsc -b --pretty false", "frontend", 10));
 }
 if (existsSync("infra/lib")) {
   results.push(run("tsc (infra)", "npx tsc --noEmit --pretty false", "infra", 10));

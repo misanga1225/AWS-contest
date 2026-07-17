@@ -55,7 +55,7 @@ docs/       アーキテクチャ図など
 | AWSアカウント + AWS CLI v2 | 認証設定済み (`aws sts get-caller-identity` が通ること) |
 | Node.js | 20以上 |
 | Rust | stable (rustup) |
-| cargo-lambda | `cargo install cargo-lambda` |
+| cargo-lambda | `pip install cargo-lambda` / `brew install cargo-lambda` / `scoop install cargo-lambda` ([公式手順](https://www.cargo-lambda.info/guide/installation.html)) |
 | AWS CDK | `npm install -g aws-cdk` (またはnpx使用) |
 
 **Bedrockモデルアクセスの有効化**: デプロイ先リージョン(既定: `ap-northeast-1`)のBedrockコンソール →「モデルアクセス」で **Anthropic Claude** を有効化
@@ -132,7 +132,7 @@ cargo lambda watch              # Lambdaローカル起動
 npm install                     # 初回のみ
 npm run dev                     # 開発サーバー (.env にAPI URL / Cognito設定が必要)
 npx vitest run                  # テスト
-npx tsc --noEmit                # 型チェック
+npx tsc -b                      # 型チェック
 
 # インフラ (infra/)
 npx cdk synth                   # テンプレート検証

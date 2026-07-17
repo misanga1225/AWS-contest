@@ -1,2 +1,19 @@
-/target
+# Rust
+target/
+
+# Node
+node_modules/
+dist/
+
+# CDK
+cdk.out/
+*.tsbuildinfo
+
+# 環境変数・秘匿情報
 .env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db

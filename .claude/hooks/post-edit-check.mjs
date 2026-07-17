@@ -3,6 +3,12 @@
 // 失敗時は stderr に出力して exit 2（Claudeにフィードバックされる）。
 import { readFileSync, existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+
+// フックはセッションの現在ディレクトリで実行されるため、
+// スクリプト自身の位置からプロジェクトルートを特定して移動する
+process.chdir(resolve(dirname(fileURLToPath(import.meta.url)), "..", ".."));
 
 let file = "";
 try {
@@ -28,7 +34,8 @@ let res = null;
 if (p.endsWith(".rs") && existsSync("backend/Cargo.toml")) {
   res = run("cargo check --message-format=short", "backend", 15);
 } else if (/frontend\/.+\.(ts|tsx)$/.test(p) && existsSync("frontend/package.json")) {
-  res = run("npx tsc --noEmit --pretty false", "frontend", 15);
+  // viteテンプレートはproject references構成のため -b で全プロジェクトを検査する
+  res = run("npx tsc -b --pretty false", "frontend", 15);
 } else if (/infra\/.+\.ts$/.test(p) && existsSync("infra/package.json")) {
   res = run("npx tsc --noEmit --pretty false", "infra", 15);
 }

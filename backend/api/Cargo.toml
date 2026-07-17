@@ -1,0 +1,9 @@
+[package]
+name = "api"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+axum = { workspace = true }
+lambda_http = { workspace = true }
+tokio = { workspace = true }

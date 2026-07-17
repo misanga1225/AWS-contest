@@ -60,7 +60,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/post-edit-check.mjs"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-edit-check.mjs\""
           }
         ]
       }
@@ -70,7 +70,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/stop-check.mjs"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-check.mjs\""
           }
         ]
       }
@@ -81,7 +81,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/pre-bash-guard.mjs"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-bash-guard.mjs\""
           }
         ]
       }
