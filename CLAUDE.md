@@ -27,7 +27,7 @@
 - `npm run build` — プロダクションビルド
 - `npx vitest run` — テスト
 - `npm run lint` — ESLint
-- `npx tsc --noEmit` — 型チェック
+- `npx tsc -b` — 型チェック（project references構成のため `--noEmit` ではなく `-b` を使う）
 
 ### インフラ (infra/)
 - `npx cdk synth` — テンプレート合成（検証を兼ねる）
