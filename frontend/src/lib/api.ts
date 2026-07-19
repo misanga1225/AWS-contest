@@ -1,0 +1,136 @@
+// 型付き API クライアント。全応答に型を付け、Cognito idToken を Authorization に載せる。
+
+import { fetchAuthSession } from 'aws-amplify/auth';
+import type { CareRecord, Category, HandoverSummary, Resident, Shift } from '../types';
+
+/** API エラー (HTTP ステータスとメッセージを保持)。 */
+export class ApiError extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+interface ErrorBody {
+  error?: string;
+}
+
+async function authHeader(): Promise<Record<string, string>> {
+  const session = await fetchAuthSession();
+  const token = session.tokens?.idToken?.toString();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+export interface CreateRecordInput {
+  floor: string;
+  resident_id?: string;
+  text: string;
+}
+
+export interface ApproveRecordInput {
+  floor: string;
+  created_at: string;
+  resident_id: string;
+  category: Category;
+  body_ja: string;
+}
+
+export interface ResidentInput {
+  floor: string;
+  name: string;
+  room: string;
+  baseline: string;
+}
+
+export interface ListRecordsParams {
+  floor: string;
+  shift?: Shift;
+  date?: string;
+  status?: 'draft' | 'approved';
+}
+
+export interface TriggerSummaryInput {
+  floor: string;
+  date?: string;
+  shift?: Shift;
+}
+
+export class ApiClient {
+  private readonly base: string;
+  constructor(base: string) {
+    this.base = base;
+  }
+
+  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+    const headers: Record<string, string> = {
+      'content-type': 'application/json',
+      ...(await authHeader()),
+    };
+    const res = await fetch(this.base + path, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (!res.ok) {
+      let message = res.statusText;
+      try {
+        const data = (await res.json()) as ErrorBody;
+        if (data.error) message = data.error;
+      } catch {
+        // 本文なし
+      }
+      throw new ApiError(res.status, message);
+    }
+    if (res.status === 204) return undefined as T;
+    return (await res.json()) as T;
+  }
+
+  // --- 利用者 ---
+  listResidents(floor: string): Promise<Resident[]> {
+    return this.request('GET', `/residents?floor=${encodeURIComponent(floor)}`);
+  }
+  createResident(input: ResidentInput): Promise<Resident> {
+    return this.request('POST', '/residents', input);
+  }
+  updateResident(id: string, input: ResidentInput): Promise<Resident> {
+    return this.request('PUT', `/residents/${encodeURIComponent(id)}`, input);
+  }
+  deleteResident(id: string, floor: string): Promise<void> {
+    return this.request(
+      'DELETE',
+      `/residents/${encodeURIComponent(id)}?floor=${encodeURIComponent(floor)}`,
+    );
+  }
+  seedDemo(floors?: string[]): Promise<Resident[]> {
+    return this.request('POST', '/demo-data', floors ? { floors } : {});
+  }
+
+  // --- 記録 ---
+  createRecord(input: CreateRecordInput): Promise<CareRecord> {
+    return this.request('POST', '/records', input);
+  }
+  approveRecord(id: string, input: ApproveRecordInput): Promise<CareRecord> {
+    return this.request('PUT', `/records/${encodeURIComponent(id)}/approve`, input);
+  }
+  listRecords(params: ListRecordsParams): Promise<CareRecord[]> {
+    const q = new URLSearchParams({ floor: params.floor });
+    if (params.shift) q.set('shift', params.shift);
+    if (params.date) q.set('date', params.date);
+    if (params.status) q.set('status', params.status);
+    return this.request('GET', `/records?${q.toString()}`);
+  }
+
+  // --- サマリ ---
+  listSummaries(floor: string): Promise<HandoverSummary[]> {
+    return this.request('GET', `/summaries?floor=${encodeURIComponent(floor)}`);
+  }
+  getSummaryDetail(floor: string, date: string, shift: Shift): Promise<HandoverSummary> {
+    const q = new URLSearchParams({ floor, date, shift });
+    return this.request('GET', `/summaries/detail?${q.toString()}`);
+  }
+  triggerSummary(input: TriggerSummaryInput): Promise<HandoverSummary> {
+    return this.request('POST', '/summaries/trigger', input);
+  }
+}

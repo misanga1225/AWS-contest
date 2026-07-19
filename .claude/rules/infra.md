@@ -8,7 +8,8 @@ paths:
 - VPC は使わない。VPC・NAT Gateway・RDS 等を追加するコードを書かない
 - サービス間認証はすべて IAM ロール。APIキー・シークレット文字列での認証を実装しない
 - IAM は最小権限。`*` リソースやワイルドカードアクションを避け、テーブルARN・モデルARN単位で絞る
-- 設定値は SSM Parameter Store、秘匿情報は Secrets Manager。CDKコード内に値をハードコードしない
+- 設定値は SSM Parameter Store（標準ティア＝無料）。CDKコード内に値をハードコードしない
+- Secrets Manager は使わない（月額課金が発生するため）。秘匿情報を保存する設計にせず、サービス間はIAMロール認証で完結させる
 - CloudFront + S3 は OAC (Origin Access Control) で接続。S3バケットの公開設定は禁止
 - API Gateway は HTTP API + Cognito JWTオーソライザ。オーソライザなしのルートを作らない（ヘルスチェックを除く）
 - EventBridge Scheduler のシフト終了スケジュールはSSMのシフト定義と整合させる
