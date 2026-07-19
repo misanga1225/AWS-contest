@@ -1,7 +1,7 @@
 # Project
 
 介護施設向け申し送り支援Webアプリ（AWSハッカソン）。
-フルサーバレス構成（VPCなし）: CloudFront + S3 / Cognito / API Gateway HTTP API (JWTオーソライザ) / Rust Lambda×2 (provided.al2023, arm64) / Amazon Bedrock (Claude) / DynamoDB単一テーブル / EventBridge Scheduler / SSM Parameter Store + Secrets Manager。
+フルサーバレス構成（VPCなし）: CloudFront + S3 / Cognito / API Gateway HTTP API (JWTオーソライザ) / Rust Lambda×2 (provided.al2023, arm64) / Amazon Bedrock (Claude) / DynamoDB単一テーブル / EventBridge Scheduler / SSM Parameter Store（設定値）。秘匿情報の保存は行わず、サービス間はIAMロール認証（Secrets Managerは使わない＝月額課金回避）。
 アーキテクチャ図: docs/AWS_contest.png
 
 ## ディレクトリ構成
