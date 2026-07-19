@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod bedrock;
 pub mod fake;
+pub mod glossary;
 pub mod prompt;
 
 /// LLM 処理エラー。JSON パース失敗などをパニックさせず伝播する。

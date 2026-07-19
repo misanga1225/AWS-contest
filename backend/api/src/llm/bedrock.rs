@@ -69,7 +69,7 @@ impl BedrockLlm {
 impl Llm for BedrockLlm {
     async fn structure(&self, req: StructureRequest) -> Result<StructuredCareMemo, LlmError> {
         let user = prompt::structure_user_prompt(&req);
-        let text = self.invoke(prompt::STRUCTURE_SYSTEM, user).await?;
+        let text = self.invoke(&prompt::structure_system(), user).await?;
         let json_str = prompt::extract_json(&text)
             .ok_or_else(|| LlmError::Parse("JSON が見つかりません".to_string()))?;
         serde_json::from_str::<StructuredCareMemo>(json_str)
@@ -78,7 +78,7 @@ impl Llm for BedrockLlm {
 
     async fn summarize(&self, req: SummarizeRequest) -> Result<Vec<SummaryItem>, LlmError> {
         let user = prompt::summarize_user_prompt(&req);
-        let text = self.invoke(prompt::SUMMARIZE_SYSTEM, user).await?;
+        let text = self.invoke(&prompt::summarize_system(), user).await?;
         let json_str = prompt::extract_json(&text)
             .ok_or_else(|| LlmError::Parse("JSON が見つかりません".to_string()))?;
         let raw: Vec<SummaryItemRaw> =

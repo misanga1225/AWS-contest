@@ -3,6 +3,7 @@
 //! ガードレールをシステムプロンプトに明記する:
 //! 診断・治療・ケア方針の提案をさせず、転記・翻訳・要約・整形と確認喚起に限定する。
 
+use super::glossary::glossary_block;
 use super::{StructureRequest, SummarizeRequest};
 
 /// 構造化・翻訳のシステムプロンプト。
@@ -25,6 +26,20 @@ pub const SUMMARIZE_SYSTEM: &str = "\
 - priority は次の3段階: attention(要注意=インシデントや平常時からの大きな変化), \
 change(変化あり=平常時と異なる観察), none(特記なし)。\n\
 - 出力は必ず指定の JSON のみ。前置き・後置き・コードフェンスを付けない。";
+
+/// 構造化のシステムプロンプト（ガードレール + 介護用語辞書）。
+///
+/// 母語入力に略語・現場用語が含まれても正しく日本語記録へ整形できるよう辞書を添える。
+pub fn structure_system() -> String {
+    format!("{STRUCTURE_SYSTEM}\n\n{}", glossary_block())
+}
+
+/// 要約のシステムプロンプト（ガードレール + 介護用語辞書）。
+///
+/// 承認済み記録に含まれる略語・現場用語を誤解釈せず要約できるよう辞書を添える。
+pub fn summarize_system() -> String {
+    format!("{SUMMARIZE_SYSTEM}\n\n{}", glossary_block())
+}
 
 /// 構造化のユーザープロンプトを組み立てる。
 pub fn structure_user_prompt(req: &StructureRequest) -> String {
@@ -125,5 +140,25 @@ mod tests {
     fn extract_json_ignores_braces_in_strings() {
         let t = "{\"text\": \"a } b\"}";
         assert_eq!(extract_json(t), Some("{\"text\": \"a } b\"}"));
+    }
+
+    #[test]
+    fn summarize_system_includes_glossary_and_guardrails() {
+        let s = summarize_system();
+        // ガードレール（要約の基本方針）が残っている
+        assert!(s.contains("優先度"));
+        // 誤読されやすい代表的な用語が辞書として含まれる
+        for term in ["端座位", "PEG", "傾眠", "陰洗"] {
+            assert!(s.contains(term), "辞書に {term} が含まれていない");
+        }
+        // 辞書利用のガードレール（推測させない）が含まれる
+        assert!(s.contains("勝手に推測"));
+    }
+
+    #[test]
+    fn structure_system_includes_glossary() {
+        let s = structure_system();
+        assert!(s.contains("介護用語辞書"));
+        assert!(s.contains("ADL"));
     }
 }
