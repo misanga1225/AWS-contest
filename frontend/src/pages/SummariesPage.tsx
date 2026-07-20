@@ -6,7 +6,15 @@ import { useApp } from '../lib/appContext';
 import { useRecords, useResidents, useSummaries, useTriggerSummary } from '../lib/queries';
 import type { CareRecord, HandoverSummary, Priority, Resident, Shift, SummaryItem } from '../types';
 import { PriorityBadge } from '../components/badges';
-import { Button, Card, ErrorText, Select } from '../components/ui';
+import { Segmented } from '../components/Segmented';
+import {
+  Button,
+  Card,
+  EmptyState,
+  ErrorText,
+  SkeletonCard,
+  Spinner,
+} from '../components/ui';
 
 const PRIORITY_ORDER: Record<Priority, number> = { attention: 0, change: 1, none: 2 };
 
@@ -19,7 +27,8 @@ export function SummariesPage() {
   const { floor } = useApp();
   const summaries = useSummaries(floor);
   const approvedRecords = useRecords({ floor, status: 'approved' });
-  const residents = useResidents(floor);
+  // 退所者も含める。サマリが参照する利用者が退所していても氏名を解決できるようにするため
+  const residents = useResidents(floor, true);
   const trigger = useTriggerSummary();
   const [shift, setShift] = useState<Shift>('day');
 
@@ -29,32 +38,47 @@ export function SummariesPage() {
     await trigger.mutateAsync({ floor, date: todayStr(), shift });
   };
 
+  const shiftOptions = [
+    { value: 'day' as const, label: t('summaries.day') },
+    { value: 'night' as const, label: t('summaries.night') },
+  ];
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-bold text-slate-800">{t('summaries.title')}</h1>
-        <div className="ml-auto flex items-center gap-2">
-          <Select
+        <h1 className="text-title text-label">{t('summaries.title')}</h1>
+        <div className="ml-auto flex items-center gap-3">
+          <Segmented
+            options={shiftOptions}
             value={shift}
-            onChange={(e) => setShift(e.target.value as Shift)}
-            aria-label="shift"
-          >
-            <option value="day">{t('summaries.day')}</option>
-            <option value="night">{t('summaries.night')}</option>
-          </Select>
+            onChange={setShift}
+            ariaLabel={t('summaries.shift')}
+          />
           <Button disabled={trigger.isPending} onClick={() => void onGenerate()}>
-            {trigger.isPending ? t('summaries.generating') : t('summaries.generate')}
+            {trigger.isPending ? (
+              <Spinner label={t('summaries.generating')} />
+            ) : (
+              t('summaries.generate')
+            )}
           </Button>
         </div>
       </div>
 
       {trigger.isError && <ErrorText>{t('common.error')}</ErrorText>}
 
-      <p className="rounded-md bg-slate-100 p-3 text-sm text-slate-600">{t('summaries.aiNote')}</p>
+      {/* LLM 出力である旨の注意書き。目立たせすぎず、常に視界には入る位置に置く */}
+      <p className="rounded-control border-l-2 border-separator bg-sunken px-3 py-2 text-sub text-label-2">
+        {t('summaries.aiNote')}
+      </p>
 
-      {summaries.isLoading && <p className="text-slate-500">{t('common.loading')}</p>}
+      {summaries.isLoading && (
+        <div className="space-y-3">
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      )}
       {latest === undefined && !summaries.isLoading && (
-        <p className="text-slate-500">{t('summaries.empty')}</p>
+        <EmptyState message={t('summaries.empty')} />
       )}
 
       {latest && (
@@ -95,7 +119,7 @@ function SummaryView({
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-slate-400">
+      <p className="text-caption tabular-nums text-label-3">
         {t('summaries.generatedAt')}: {summary.generated_at} / {t('summaries.shift')}:{' '}
         {t(`summaries.${summary.shift === 'night' ? 'night' : 'day'}`)}
       </p>
@@ -112,12 +136,15 @@ function SummaryView({
       </div>
 
       {appended.length > 0 && (
-        <Card className="border-sky-200 bg-sky-50/40">
-          <p className="mb-2 text-sm font-semibold text-sky-700">{t('summaries.appended')}</p>
-          <ul className="space-y-1">
+        <Card tone="accent">
+          <p className="mb-2 text-section text-accent">{t('summaries.appended')}</p>
+          <ul className="space-y-1.5">
             {appended.map((r) => (
-              <li key={r.id} className="text-sm text-slate-700">
-                ・{r.body_ja}
+              <li key={r.id} className="flex gap-2 text-sub text-label">
+                <span aria-hidden="true" className="text-label-3">
+                  ・
+                </span>
+                {r.body_ja}
               </li>
             ))}
           </ul>
@@ -145,18 +172,31 @@ function ItemCard({
     <Card>
       <div className="flex items-center gap-2">
         <PriorityBadge priority={item.priority} />
-        {residentLabel && <span className="text-sm font-medium text-slate-700">{residentLabel}</span>}
+        {residentLabel && <span className="text-section text-label">{residentLabel}</span>}
       </div>
-      <p className="mt-2 text-slate-800">{item.text}</p>
+      <p className="mt-2 text-label">{item.text}</p>
       {evidence.length > 0 && (
-        <details className="mt-2">
-          <summary className="cursor-pointer text-sm text-sky-700">
+        <details className="group mt-3 border-t border-separator pt-2">
+          <summary
+            className={[
+              'inline-flex cursor-pointer items-center gap-1 rounded-control py-0.5 text-sub text-accent outline-none',
+              'transition-colors duration-150 ease-spring hover:text-accent-hover',
+              'focus-visible:ring-3 focus-visible:ring-accent/30',
+            ].join(' ')}
+          >
+            {/* 自前の開閉シェブロン (::marker は index.css で非表示にしている) */}
+            <span
+              aria-hidden="true"
+              className="transition-transform duration-150 ease-spring group-open:rotate-90"
+            >
+              ›
+            </span>
             {t('summaries.evidence')} ({evidence.length})
           </summary>
-          <ul className="mt-1 space-y-1 pl-4">
+          <ul className="mt-2 space-y-1.5 pl-4">
             {evidence.map((r) => (
-              <li key={r.id} className="text-sm text-slate-600">
-                ・[{r.created_at}] {r.body_ja}
+              <li key={r.id} className="text-sub text-label-2">
+                <span className="tabular-nums text-label-3">[{r.created_at}]</span> {r.body_ja}
               </li>
             ))}
           </ul>

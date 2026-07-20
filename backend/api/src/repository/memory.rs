@@ -76,6 +76,12 @@ impl Repository for InMemoryRepository {
             .collect())
     }
 
+    async fn has_records_for_resident(&self, resident_id: &str) -> Result<bool, RepoError> {
+        Ok(lock(&self.records)?
+            .values()
+            .any(|r| r.resident_id == resident_id))
+    }
+
     async fn put_resident(&self, resident: &Resident) -> Result<(), RepoError> {
         let pk = keys::floor_pk(&resident.floor);
         let sk = keys::resident_sk(&resident.id);

@@ -1,7 +1,14 @@
 // 型付き API クライアント。全応答に型を付け、Cognito idToken を Authorization に載せる。
 
 import { fetchAuthSession } from 'aws-amplify/auth';
-import type { CareRecord, Category, HandoverSummary, Resident, Shift } from '../types';
+import type {
+  CareRecord,
+  Category,
+  DeleteResidentResponse,
+  HandoverSummary,
+  Resident,
+  Shift,
+} from '../types';
 
 /** API エラー (HTTP ステータスとメッセージを保持)。 */
 export class ApiError extends Error {
@@ -25,7 +32,8 @@ async function authHeader(): Promise<Record<string, string>> {
 
 export interface CreateRecordInput {
   floor: string;
-  resident_id?: string;
+  /** 対象利用者。必須（LLM に推定させない） */
+  resident_id: string;
   text: string;
 }
 
@@ -88,8 +96,10 @@ export class ApiClient {
   }
 
   // --- 利用者 ---
-  listResidents(floor: string): Promise<Resident[]> {
-    return this.request('GET', `/residents?floor=${encodeURIComponent(floor)}`);
+  listResidents(floor: string, includeDischarged = false): Promise<Resident[]> {
+    const q = new URLSearchParams({ floor });
+    if (includeDischarged) q.set('include_discharged', 'true');
+    return this.request('GET', `/residents?${q.toString()}`);
   }
   createResident(input: ResidentInput): Promise<Resident> {
     return this.request('POST', '/residents', input);
@@ -97,7 +107,7 @@ export class ApiClient {
   updateResident(id: string, input: ResidentInput): Promise<Resident> {
     return this.request('PUT', `/residents/${encodeURIComponent(id)}`, input);
   }
-  deleteResident(id: string, floor: string): Promise<void> {
+  deleteResident(id: string, floor: string): Promise<DeleteResidentResponse> {
     return this.request(
       'DELETE',
       `/residents/${encodeURIComponent(id)}?floor=${encodeURIComponent(floor)}`,

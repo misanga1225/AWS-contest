@@ -32,7 +32,11 @@ pub async fn build_state(config: AppConfig) -> Arc<AppState> {
     let dynamo = aws_sdk_dynamodb::Client::new(&shared);
     let bedrock = aws_sdk_bedrockruntime::Client::new(&shared);
 
-    let repo = Arc::new(DynamoRepository::new(dynamo, config.table_name.clone()));
+    let repo = Arc::new(DynamoRepository::new(
+        dynamo,
+        config.table_name.clone(),
+        config.index_name.clone(),
+    ));
     let llm = Arc::new(BedrockLlm::new(bedrock, config.bedrock_model_id.clone()));
     AppState::new(repo, llm, config)
 }

@@ -17,6 +17,8 @@ pub enum ConfigError {
 #[derive(Debug, Clone)]
 pub struct AppConfig {
     pub table_name: String,
+    /// 利用者別時系列 GSI の名前。
+    pub index_name: String,
     pub bedrock_model_id: String,
     pub shift: ShiftConfig,
     /// デモデータ初期化やサマリ一括生成の対象フロア。
@@ -28,6 +30,8 @@ impl AppConfig {
     /// JST 日勤 09:00-18:00 相当) を持つが、実運用では infra が SSM 値を注入する。
     pub fn from_env() -> Result<Self, ConfigError> {
         let table_name = env::var("TABLE_NAME").map_err(|_| ConfigError::Missing("TABLE_NAME"))?;
+        // GSI 名は infra (CDK) が定義した物理名を INDEX_NAME として注入する。
+        let index_name = env::var("INDEX_NAME").unwrap_or_else(|_| "GSI1".to_string());
         // モデル ID は infra が SSM 値を BEDROCK_MODEL_ID として注入する。
         let bedrock_model_id = env::var("BEDROCK_MODEL_ID")
             .unwrap_or_else(|_| "apac.anthropic.claude-3-haiku-20240307-v1:0".to_string());
@@ -42,6 +46,7 @@ impl AppConfig {
             .collect();
         Ok(AppConfig {
             table_name,
+            index_name,
             bedrock_model_id,
             shift,
             floors,

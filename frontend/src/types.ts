@@ -41,6 +41,12 @@ export interface CareRecord {
   approved_at: string | null;
 }
 
+/**
+ * 利用者の在籍状態。
+ * ケア記録には法定の保存義務があるため、記録がある利用者は物理削除せず discharged にする。
+ */
+export type ResidentStatus = 'active' | 'discharged';
+
 /** 利用者マスタ。 */
 export interface Resident {
   schema_version: number;
@@ -50,6 +56,15 @@ export interface Resident {
   room: string;
   baseline: string;
   created_at: string;
+  status: ResidentStatus;
+  discharged_at: string | null;
+}
+
+/** 利用者の削除要求の結果。記録の有無で挙動が変わる。 */
+export type DeleteResidentOutcome = 'deleted' | 'discharged';
+
+export interface DeleteResidentResponse {
+  outcome: DeleteResidentOutcome;
 }
 
 /** サマリの 1 項目。 */
