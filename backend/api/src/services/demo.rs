@@ -60,5 +60,7 @@ pub async fn seed(repo: &dyn Repository, floors: &[String]) -> Result<Vec<Reside
             created.push(resident);
         }
     }
+    // 監査ログ: デモデータ投入は本番データに混入しうる操作のため記録する。
+    tracing::info!(floors = ?floors, count = created.len(), "demo data seeded");
     Ok(created)
 }

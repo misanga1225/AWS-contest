@@ -56,6 +56,9 @@ pub struct TriggerBody {
     pub date: Option<String>,
     #[serde(default)]
     pub shift: Option<String>,
+    /// 既存サマリがあっても再生成する。未指定時は false (既存サマリをそのまま返す)。
+    #[serde(default)]
+    pub force: bool,
 }
 
 /// POST /summaries/trigger — 手動でサマリ生成する。
@@ -82,6 +85,7 @@ pub async fn trigger(
         &body.floor,
         date,
         shift,
+        body.force,
     )
     .await?;
     Ok(Json(summary))

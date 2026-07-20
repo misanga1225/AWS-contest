@@ -23,10 +23,21 @@ struct SummarizerEvent {
     shift: Option<String>,
     #[serde(default)]
     floors: Option<Vec<String>>,
+    /// 既存サマリがあっても再生成する。未指定時は false (冪等・再試行での重複課金を避ける)。
+    #[serde(default)]
+    force: bool,
 }
 
 async fn handler(event: LambdaEvent<Value>) -> Result<Value, Error> {
-    let input: SummarizerEvent = serde_json::from_value(event.payload).unwrap_or_default();
+    let input: SummarizerEvent = match serde_json::from_value(event.payload) {
+        Ok(v) => v,
+        Err(e) => {
+            // 不正なペイロードを黙ってデフォルト値 (現在シフト・全フロア) にフォールバックせず、
+            // 意図しない範囲でのサマリ再生成に気付けるよう記録する。
+            tracing::warn!(error = %e, "failed to parse summarizer event payload, using defaults");
+            SummarizerEvent::default()
+        }
+    };
 
     let config = AppConfig::from_env()?;
     let floors = input
@@ -47,6 +58,7 @@ async fn handler(event: LambdaEvent<Value>) -> Result<Value, Error> {
             floor,
             date,
             shift,
+            input.force,
         )
         .await
         {

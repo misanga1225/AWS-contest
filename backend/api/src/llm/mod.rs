@@ -72,10 +72,12 @@ pub struct RecordBrief {
 }
 
 /// 要約に渡す利用者の平常時情報。
+///
+/// 氏名は含めない: 対象利用者は id で明示済みであり、LLM に送る PII を最小化する
+/// (構造化プロンプトに氏名を渡さないという方針を要約プロンプトにも適用する)。
 #[derive(Debug, Clone, Serialize)]
 pub struct ResidentBaseline {
     pub id: String,
-    pub name: String,
     pub baseline: String,
 }
 

@@ -15,6 +15,9 @@ use crate::repository::Repository;
 use crate::util::now_rfc3339;
 
 /// 指定フロア・日付・シフトのサマリを生成して保存する。
+///
+/// `force=false` かつ既存のサマリがあれば再生成せずそれを返す(冪等)。
+/// Bedrock 呼び出しの濫用・重複課金(手動トリガの連打やスケジューラの再試行)を防ぐため。
 pub async fn generate(
     repo: &dyn Repository,
     llm: &dyn Llm,
@@ -22,7 +25,15 @@ pub async fn generate(
     floor: &str,
     date: NaiveDate,
     shift: Shift,
+    force: bool,
 ) -> Result<HandoverSummary, ApiError> {
+    if !force {
+        let date_str = date.format("%Y-%m-%d").to_string();
+        if let Some(existing) = repo.get_summary(floor, &date_str, shift.as_str()).await? {
+            return Ok(existing);
+        }
+    }
+
     let window = ShiftWindow::for_date(&config.shift, date, shift);
 
     // 承認済み かつ シフト窓内の記録のみ対象
@@ -46,7 +57,6 @@ pub async fn generate(
         .into_iter()
         .map(|r| ResidentBaseline {
             id: r.id,
-            name: r.name,
             baseline: r.baseline,
         })
         .collect();

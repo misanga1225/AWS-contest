@@ -69,7 +69,7 @@ impl Llm for FakeLlm {
                 items.push(SummaryItem {
                     priority: Priority::None,
                     resident_id: Some(resident.id.clone()),
-                    text: format!("{} さん: 特記なし。", resident.name),
+                    text: "特記なし。".to_string(),
                     evidence_record_ids: Vec::new(),
                 });
                 continue;
@@ -83,11 +83,7 @@ impl Llm for FakeLlm {
             items.push(SummaryItem {
                 priority,
                 resident_id: Some(resident.id.clone()),
-                text: format!(
-                    "{} さん: {} 件の記録あり。内容の確認をお願いします。",
-                    resident.name,
-                    recs.len()
-                ),
+                text: format!("{} 件の記録あり。内容の確認をお願いします。", recs.len()),
                 evidence_record_ids: recs.iter().map(|r| r.id.clone()).collect(),
             });
         }
