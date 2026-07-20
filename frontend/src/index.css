@@ -1,88 +1,153 @@
 @import 'tailwindcss';
 
 /*
- * デザイントークン (Apple HIG: Clarity / Deference / Depth)
+ * デザイントークン（フラット / 介護現場向け）
+ *
+ * コンセプト: 安心・落ち着き・やさしさ・医療らしい信頼感。
+ * 装飾性よりも可読性。画面を開いた瞬間に「今見るべき利用者」と「今日の状況」が
+ * 3秒以内で把握できることを最優先とする。
  *
  * 原則: 色はすべてこのセマンティックトークン経由で参照する。
- *       コンポーネント側で slate-* / sky-* 等のパレットを直書きしない。
+ *       コンポーネント側で slate-* / green-* 等のパレットを直書きしない。
  *
- * アクセント(侘助紅)と警告(danger)は色相が近いため、役割を厳密に分ける:
+ * accent（ブランドグリーン）と semantic 色は役割を厳密に分ける:
  *   - accent … 操作要素のみ (ボタン / アクティブなナビ / リンク / フォーカスリング)
- *   - danger … 状態・意味のみ (要注意バッジ / 破壊的操作 / エラー)
- *   バッジにアクセント色を使わないこと。
+ *   - danger / warn / success … 状態・意味のみ (優先度バッジ / 破壊的操作 / エラー)
  */
 @theme {
-  /* --- アクセント: 侘助(椿)の臙脂 --- */
-  --color-accent: #a6415a;
-  --color-accent-hover: #8f3549;
-  --color-accent-active: #7a2c3d;
-  --color-accent-tint: #faf2f4;
-  --color-accent-muted: #e8cdd4;
+  /* --- アクセント: ブランドグリーン --- */
+  --color-accent: #68b489;
+  --color-accent-hover: #5aa37b;
+  --color-accent-active: #4e9770;
+  --color-accent-tint: #eaf7ef;
+  --color-accent-wash: #f4faf6; /* ナビのホバー。tint よりさらに淡い */
+  --color-accent-muted: #c3e3d1;
+  /*
+   * 文字・リンク用の濃いグリーン。
+   * ブランドの #68b489 は白背景に対して約 2.4:1 しかなく、本文サイズの文字色として
+   * 4.5:1 を満たさない。面(塗り)にはブランド色、文字にはこの ink を使い分ける。
+   */
+  --color-accent-ink: #35785a;
 
-  /* --- 背景 (Deference: コンテンツを邪魔しない) --- */
-  --color-canvas: #fbfaf9;
+  /*
+   * 塗りボタン用の濃いグリーン (白文字が乗る面)。
+   *
+   * ブランドの #68b489 に白文字は約 2.5:1 で、有効なボタンでも「無効化されている」ように
+   * 見えてしまう。押せる状態がひと目で分かることは業務アプリでは可読性より優先度が高いため、
+   * 白文字が乗る面だけこの濃い色を使う (白文字に対して約 4.9:1 = WCAG AA 達成)。
+   * tint / ボーダー / ドット / ロゴなど「文字が乗らない面」は引き続き --color-accent を使い、
+   * ブランドの印象は保つ。
+   */
+  --color-accent-solid: #3f7d58;
+  --color-accent-solid-hover: #34684a;
+
+  /* --- 背景 --- */
+  --color-canvas: #f8faf9;
   --color-surface: #ffffff;
-  --color-sunken: #f5f3f1;
+  --color-sunken: #f4f6f5;
 
   /* --- テキスト階層 --- */
-  --color-label: #1c1b1a;
-  --color-label-2: #6e6b68;
-  --color-label-3: #9a9691;
+  --color-label: #1f2937;
+  --color-label-2: #6b7280;
+  --color-label-3: #9199a5;
 
   /* --- 罫線・塗り --- */
-  --color-separator: #e8e5e2;
-  --color-fill: rgb(28 27 26 / 0.04);
-  --color-fill-strong: rgb(28 27 26 / 0.07);
+  --color-separator: #e5e7eb; /* サイドバー枠・区切り */
+  --color-hairline: #ececec; /* カード枠・リスト行の区切り */
+  --color-fill: rgb(31 41 55 / 0.04);
+  --color-fill-strong: rgb(31 41 55 / 0.07);
 
-  /* --- セマンティック (アクセントとは独立) --- */
-  --color-danger: #c7332a;
-  --color-danger-hover: #a92a22;
-  --color-danger-tint: #fdeceb;
-  --color-danger-muted: #f2c9c6;
+  /*
+   * --- セマンティック ---
+   * 各色は「面(塗り・ドット)」用のブランド値と、「文字」用の ink を持つ。
+   * ブランド値のままでは白/tint 背景で 4.5:1 に届かないため、
+   * 文字には必ず -ink を使う（バッジのラベル等）。
+   */
+  --color-danger: #e86a6a;
+  --color-danger-hover: #d55555;
+  --color-danger-ink: #b23b3b;
+  /* 塗りボタン用 (白文字が乗る面)。#e86a6a に白文字は 3.1:1 で AA に届かない */
+  --color-danger-solid: #c93a3a;
+  --color-danger-solid-hover: #b02f2f;
+  --color-danger-tint: #fdeded;
+  --color-danger-muted: #f5c8c8;
 
-  --color-warn: #b7791f;
-  --color-warn-tint: #fdf6e7;
-  --color-warn-muted: #eddcb4;
+  --color-warn: #f5b247;
+  --color-warn-ink: #8a5a06;
+  --color-warn-tint: #fdf4e6;
+  --color-warn-muted: #f0dcb4;
 
-  --color-success: #3f7d58;
+  --color-success: #66c488;
+  --color-success-ink: #2f7d53;
+  --color-success-tint: #eaf7ef;
+  --color-success-muted: #c3e3d1;
 
-  /* --- 角丸 --- */
-  --radius-control: 8px;
-  --radius-card: 12px;
-  --radius-sheet: 16px;
+  --color-info: #74a9f7;
+  --color-info-ink: #2b62b8;
+  --color-info-tint: #eef4fe;
+
+  /* --- 角丸: 入力欄/ボタン 10px・カード 16px・モーダル 20px・タグ 999px --- */
+  --radius-control: 10px;
+  --radius-card: 16px;
+  --radius-sheet: 20px;
+
+  /* --- 影: 3段階。フラットデザインのため常にごく弱く --- */
+  --shadow-sm: 0 1px 3px rgb(0 0 0 / 0.04);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.06);
+  --shadow-lg: 0 12px 30px rgb(0 0 0 / 0.08);
+  /* カード既定。sm と md の中間 (仕様: 0 2px 6px rgba(0,0,0,.04)) */
+  --shadow-card: 0 2px 6px rgb(0 0 0 / 0.04);
 
   /* --- タイポグラフィ ---
-   * 階層はサイズではなくウェイトと色で作る (HIG)。
-   * 日本語主体のため行間は広め、見出しは字間を詰める。 */
-  --text-display: 26px;
-  --text-display--line-height: 1.35;
-  --text-display--letter-spacing: -0.02em;
-  --text-display--font-weight: 600;
+   * 情報の優先順位を余白・文字サイズ・色で表現する。行間は 1.5 倍。 */
+  --text-display: 32px; /* ページタイトル */
+  --text-display--line-height: 1.4;
+  --text-display--font-weight: 700;
 
-  --text-title: 20px;
-  --text-title--line-height: 1.4;
-  --text-title--letter-spacing: -0.015em;
+  --text-title: 24px; /* セクションタイトル・勤務情報 */
+  --text-title--line-height: 1.5;
   --text-title--font-weight: 600;
 
-  --text-section: 15px;
+  --text-section: 20px; /* カードタイトル */
   --text-section--line-height: 1.5;
-  --text-section--letter-spacing: -0.01em;
   --text-section--font-weight: 600;
 
-  --text-body: 15px;
-  --text-body--line-height: 1.75;
+  --text-metric: 40px; /* ダッシュボードの件数 */
+  --text-metric--line-height: 1.2;
+  --text-metric--font-weight: 700;
 
-  --text-sub: 13px;
+  --text-body: 16px;
+  --text-body--line-height: 1.6;
+
+  --text-sub: 14px;
   --text-sub--line-height: 1.6;
 
   --text-caption: 12px;
   --text-caption--line-height: 1.5;
 
-  /* --- モーション: Apple のスプリング風イージング --- */
-  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  /* --- モーション: 200ms ease-in-out --- */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /*
+   * --- ブレークポイント ---
+   * 仕様のレスポンシブ境界に合わせる:
+   *   md (768px) 未満  … サイドバー廃止・下部ナビ・1カラム
+   *   md 〜 wide 未満  … サイドバー折りたたみ(アイコンのみ)・2カラム
+   *   wide (1200px) 〜 … サイドバー固定・2〜3カラム
+   *
+   * ⚠ Tailwind v4 はブレークポイントの media query を「定義順」で出力する
+   *   (数値の昇順ではない)。既定値に `--breakpoint-wide` を足すだけだと wide が
+   *   sm/md より前に出力され、幅1200px以上で後勝ちの `md:*` が `wide:*` を打ち消す。
+   *   そのため一度 `initial` で既定を消し、昇順で定義し直している。
+   *   ここに追加するときは必ず昇順を保つこと。
+   */
+  --breakpoint-*: initial;
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-wide: 1200px;
 
   --font-sans:
-    -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic UI', 'Noto Sans JP', 'Segoe UI',
+    'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic UI', 'Segoe UI',
     system-ui, sans-serif;
 }
 
@@ -93,14 +158,12 @@
 body {
   margin: 0;
   font-family: var(--font-sans);
-  /* palt: 日本語の約物を詰めて字面を締める */
-  font-feature-settings: 'palt' 1;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--color-canvas);
   color: var(--color-label);
   font-size: var(--text-body);
-  line-height: 1.75;
+  line-height: 1.6;
 }
 
 /* ルビ(AI=ラブ)は控えめに。字面を押し上げないよう小さく淡く */
@@ -119,167 +182,25 @@ summary {
   list-style: none;
 }
 
-/*
- * マテリアル層
- *
- * 単色ベタ塗りは安く見える。Apple の質感は次の4つの重ね合わせで出来ている:
- *   1. ごく浅い縦グラデーション (上が明るい = 上から光が当たっている)
- *   2. 上辺の内側ハイライト (inset 0 1px 0 白) = 面のエッジの反射
- *   3. 色を持った落ち影 (黒ではなく、その面の色を暗くした影)
- *   4. hairline のリング (0 0 0 .5px) = 輪郭の締まり
- * 複数プロパティの協調が要るのでユーティリティではなく CSS で書く。
- */
-@layer components {
-  /* --- ボタン: 主要アクション --- */
-  .mat-primary {
-    background-image: linear-gradient(
-      180deg,
-      color-mix(in oklab, var(--color-accent), white 14%) 0%,
-      var(--color-accent) 52%,
-      color-mix(in oklab, var(--color-accent), black 6%) 100%
-    );
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.26),
-      inset 0 0 0 0.5px rgb(122 44 61 / 0.55),
-      0 1px 2px rgb(122 44 61 / 0.24),
-      0 2px 6px rgb(122 44 61 / 0.14);
-  }
-  /* hover は filter で明るくする。background-image はCSS補間できず、
-     差し替えると影のトランジションと動きがズレるため。 */
-  .mat-primary:hover:not(:disabled) {
-    filter: brightness(1.07);
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.32),
-      inset 0 0 0 0.5px rgb(122 44 61 / 0.5),
-      0 1px 2px rgb(122 44 61 / 0.22),
-      0 4px 12px rgb(122 44 61 / 0.2);
-  }
-  /* 押下: 光源が消えて沈む */
-  .mat-primary:active:not(:disabled) {
-    filter: brightness(0.92);
-    box-shadow:
-      inset 0 1px 3px rgb(80 26 38 / 0.4),
-      inset 0 0 0 0.5px rgb(122 44 61 / 0.6);
-  }
-  .mat-primary:disabled {
-    background-image: none;
-    box-shadow: none;
-  }
-
-  /* --- ボタン: 破壊的アクション。primary と同じ作りで色相だけ差し替える --- */
-  .mat-danger {
-    background-image: linear-gradient(
-      180deg,
-      color-mix(in oklab, var(--color-danger), white 14%) 0%,
-      var(--color-danger) 52%,
-      color-mix(in oklab, var(--color-danger), black 6%) 100%
-    );
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.26),
-      inset 0 0 0 0.5px rgb(120 30 24 / 0.55),
-      0 1px 2px rgb(120 30 24 / 0.24),
-      0 2px 6px rgb(120 30 24 / 0.14);
-  }
-  .mat-danger:hover:not(:disabled) {
-    filter: brightness(1.07);
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.32),
-      inset 0 0 0 0.5px rgb(120 30 24 / 0.5),
-      0 1px 2px rgb(120 30 24 / 0.22),
-      0 4px 12px rgb(120 30 24 / 0.2);
-  }
-  .mat-danger:active:not(:disabled) {
-    filter: brightness(0.92);
-    box-shadow:
-      inset 0 1px 3px rgb(90 20 16 / 0.4),
-      inset 0 0 0 0.5px rgb(120 30 24 / 0.6);
-  }
-  .mat-danger:disabled {
-    background-image: none;
-    box-shadow: none;
-  }
-
-  /* --- ボタン: 副次。白いガラス板 --- */
-  .mat-secondary {
-    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.9) 0%, rgb(250 249 248 / 0.8) 100%);
-    backdrop-filter: saturate(180%) blur(12px);
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.9),
-      inset 0 0 0 0.5px rgb(28 27 26 / 0.12),
-      0 1px 2px rgb(28 27 26 / 0.06);
-  }
-  .mat-secondary:hover:not(:disabled) {
-    filter: brightness(1.02);
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 1),
-      inset 0 0 0 0.5px rgb(28 27 26 / 0.16),
-      0 2px 6px rgb(28 27 26 / 0.08);
-  }
-  .mat-secondary:active:not(:disabled) {
-    filter: brightness(0.96);
-    box-shadow:
-      inset 0 1px 2px rgb(28 27 26 / 0.1),
-      inset 0 0 0 0.5px rgb(28 27 26 / 0.14);
-  }
-
-  /* --- カード面。ほぼ白だが、わずかな縦グラデと上辺ハイライトで「板」に見せる --- */
-  .mat-surface {
-    background-image: linear-gradient(180deg, #ffffff 0%, #fdfcfc 100%);
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.8),
-      0 1px 1px rgb(28 27 26 / 0.03);
-  }
-
-  /* --- 浮くカード (ログイン等)。落ち影を大きく柔らかく --- */
-  .mat-raised {
-    background-image: linear-gradient(180deg, #ffffff 0%, #fdfcfc 100%);
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.9),
-      0 1px 2px rgb(28 27 26 / 0.05),
-      0 8px 24px rgb(28 27 26 / 0.07),
-      0 24px 48px rgb(28 27 26 / 0.05);
-  }
-
-  /* --- 入力欄。ごくわずかに凹ませる (押せる面ではなく受ける面) --- */
-  .mat-field {
-    box-shadow:
-      inset 0 1px 2px rgb(28 27 26 / 0.04),
-      inset 0 0 0 0.5px rgb(28 27 26 / 0.04);
-  }
-  .mat-field:focus-visible {
-    box-shadow:
-      inset 0 1px 2px rgb(28 27 26 / 0.02),
-      0 0 0 3px color-mix(in oklab, var(--color-accent) 22%, transparent);
-  }
-
-  /* --- Segmented のつまみ。物理的な「つまみ」に見せる --- */
-  .mat-thumb {
-    background-image: linear-gradient(180deg, #ffffff 0%, #fbfaf9 100%);
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 1),
-      inset 0 0 0 0.5px rgb(28 27 26 / 0.08),
-      0 1px 2px rgb(28 27 26 / 0.12),
-      0 2px 4px rgb(28 27 26 / 0.06);
-  }
-
-  /*
-   * 周辺光のある背景。フラットな単色は平面的に見えるため、
-   * アクセント色をごく薄く回り込ませて奥行きを出す。
-   */
-  .mat-ambient {
-    background-color: var(--color-canvas);
-    background-image:
-      radial-gradient(60rem 34rem at 50% -12%, rgb(166 65 90 / 0.09) 0%, transparent 62%),
-      radial-gradient(44rem 28rem at 88% 108%, rgb(166 65 90 / 0.06) 0%, transparent 58%),
-      radial-gradient(38rem 26rem at 8% 88%, rgb(110 107 104 / 0.05) 0%, transparent 60%);
-  }
+/* 数字は Medium〜Bold。桁を揃えて視線移動を減らす */
+.tabular {
+  font-variant-numeric: tabular-nums;
 }
 
-/* ConfirmDialog の登場。下からごくわずかに立ち上げる */
+/* 説明文は最大2行。溢れは省略する (要注意の利用者・最近の記録) */
+.clamp-2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+/* ConfirmDialog の登場: fade + scale */
 @keyframes dialog-in {
   from {
     opacity: 0;
-    transform: translateY(6px) scale(0.98);
+    transform: scale(0.96);
   }
   to {
     opacity: 1;

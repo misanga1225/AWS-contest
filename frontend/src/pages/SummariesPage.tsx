@@ -44,9 +44,8 @@ export function SummariesPage() {
   ];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-title text-label">{t('summaries.title')}</h1>
         <div className="ml-auto flex items-center gap-3">
           <Segmented
             options={shiftOptions}
@@ -67,7 +66,7 @@ export function SummariesPage() {
       {trigger.isError && <ErrorText>{t('common.error')}</ErrorText>}
 
       {/* LLM 出力である旨の注意書き。目立たせすぎず、常に視界には入る位置に置く */}
-      <p className="rounded-control border-l-2 border-separator bg-sunken px-3 py-2 text-sub text-label-2">
+      <p className="rounded-control border-l-4 border-info bg-info-tint px-4 py-3 text-sub text-label-2">
         {t('summaries.aiNote')}
       </p>
 
@@ -137,7 +136,7 @@ function SummaryView({
 
       {appended.length > 0 && (
         <Card tone="accent">
-          <p className="mb-2 text-section text-accent">{t('summaries.appended')}</p>
+          <p className="mb-2 text-section text-accent-ink">{t('summaries.appended')}</p>
           <ul className="space-y-1.5">
             {appended.map((r) => (
               <li key={r.id} className="flex gap-2 text-sub text-label">
@@ -179,15 +178,15 @@ function ItemCard({
         <details className="group mt-3 border-t border-separator pt-2">
           <summary
             className={[
-              'inline-flex cursor-pointer items-center gap-1 rounded-control py-0.5 text-sub text-accent outline-none',
-              'transition-colors duration-150 ease-spring hover:text-accent-hover',
-              'focus-visible:ring-3 focus-visible:ring-accent/30',
+              'inline-flex cursor-pointer items-center gap-1 rounded-control px-1 py-0.5 text-sub font-medium text-accent-ink outline-none',
+              'transition-colors duration-200 ease-standard hover:text-accent-hover',
+              'focus-visible:ring-3 focus-visible:ring-accent/40',
             ].join(' ')}
           >
             {/* 自前の開閉シェブロン (::marker は index.css で非表示にしている) */}
             <span
               aria-hidden="true"
-              className="transition-transform duration-150 ease-spring group-open:rotate-90"
+              className="transition-transform duration-200 ease-standard group-open:rotate-90"
             >
               ›
             </span>

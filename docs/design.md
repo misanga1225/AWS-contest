@@ -1,110 +1,163 @@
 # デザインガイド（AIヘルパー わびすけ）
 
-Apple Human Interface Guidelines の3原則に沿う。
-**Clarity**（明瞭）/ **Deference**（UIはコンテンツに譲る）/ **Depth**（階層は深度で示す）
+介護現場向けの業務アプリ。第一優先は**情報を素早く把握できること**。
+コンセプトは「安心・落ち着き・やさしさ・医療らしい信頼感」。装飾性よりも可読性を重視する。
 
-参照: <https://developer.apple.com/jp/design/human-interface-guidelines/>
+**画面を開いた瞬間に「今見るべき利用者」と「今日の状況」が3秒以内で把握できること**を最優先とする。
+「病院システムのような堅苦しさ」ではなく「介護職員が毎日使いたくなる優しさ」を目指す。
+
+参照モック: `docs/UI.png`
 
 ## 絶対ルール
 
 1. **色は `src/index.css` の `@theme` セマンティックトークン経由でのみ参照する。**
-   `slate-*` `sky-*` `red-*` `amber-*` など Tailwind デフォルトパレットの直書きは禁止。
-2. **アクセント色（侘助紅 `--color-accent`）は操作要素にのみ使う。**
+   `slate-*` `green-*` `red-*` `amber-*` など Tailwind デフォルトパレットの直書きは禁止。
+2. **アクセント色（ブランドグリーン `--color-accent`）は操作要素にのみ使う。**
    ボタン / アクティブなナビ / リンク / フォーカスリング。
-   バッジ・ステータス表示には使わない（`danger` / `warn` / グレーを使う）。
-   アクセントと danger は色相が近いため、この分離を崩すと意味が読めなくなる。
-3. **`focus:outline-none` の単独指定は禁止。** 必ず `focus-visible` リングを伴わせる。
-4. **色だけに情報を担わせない。** 要注意バッジのドットのように、形・文言でも判別できるようにする。
-5. **影は「実際に浮くもの」にだけ使う。** ダイアログ / ドロップダウン / sticky ヘッダー / セグメンテッドコントロールのつまみ。
-   カード・リストは 1px の hairline（`border-separator`）のみで面を区切る。
+   バッジ・ステータス表示には使わない（`danger` / `warn` / `success` を使う）。
+3. **文字には `-ink` 系トークンを使う。**
+   ブランド値（`accent` `danger` `warn` `success`）は彩度が高く明るいため、白や tint 背景の上で
+   コントラスト比 4.5:1 に届かない。**面（塗り・ドット・ボーダー）にはブランド値、文字には `-ink`。**
+   例: バッジのラベルは `text-warn-ink`、リンクは `text-accent-ink`。
+4. **`focus:outline-none` の単独指定は禁止。** 必ず `focus-visible` リングを伴わせる。
+5. **色だけに情報を担わせない。** 優先度バッジはドット + 文言でも判別できるようにする。
+6. **アイコンだけで意味を持たせない。** 必ずテキストラベルを併記する。
+   併記できない場所（折りたたみサイドバー・アイコンボタン）は `aria-label` と `sr-only` で補う。
+7. **フラットデザイン。** グラデーション・内側ハイライト・質感表現は使わない。
+   面の区別は「白背景 + 1px hairline + ごく弱い影」だけで行う。
 
 ## トークン
 
 | 種別 | トークン |
 |---|---|
-| アクセント | `accent` `accent-hover` `accent-active` `accent-tint` `accent-muted` |
-| 背景 | `canvas`（ページ）/ `surface`（カード面）/ `sunken`（補足ブロック） |
-| テキスト | `label`（主）/ `label-2`（副）/ `label-3`（補助・日時） |
-| 罫線・塗り | `separator` / `fill`（ghost hover）/ `fill-strong`（secondary hover） |
-| 意味 | `danger` `warn` `success`（各 `-tint` `-muted` あり） |
-| 角丸 | `rounded-control` 8px / `rounded-card` 12px / `rounded-sheet` 16px |
-| タイポ | `text-display` `text-title` `text-section` `text-body` `text-sub` `text-caption` |
-| イージング | `ease-spring`（`cubic-bezier(0.32, 0.72, 0, 1)`） |
+| アクセント | `accent` `accent-hover` `accent-active` `accent-tint` `accent-wash` `accent-muted` `accent-ink` |
+| 背景 | `canvas` #F8FAF9（ページ）/ `surface` #FFF（カード）/ `sunken`（補足ブロック） |
+| テキスト | `label` #1F2937（主）/ `label-2` #6B7280（副）/ `label-3`（補助・日時） |
+| 罫線 | `separator` #E5E7EB（サイドバー枠）/ `hairline` #ECECEC（カード枠・リスト行の区切り） |
+| 塗り | `fill`（ghost hover）/ `fill-strong`（スケルトン） |
+| 意味 | `danger` `warn` `success` `info`（各 `-tint` `-muted` `-ink` あり） |
+| 角丸 | `rounded-control` 10px（入力欄・ボタン）/ `rounded-card` 16px / `rounded-sheet` 20px（モーダル）/ `rounded-full`（タグ） |
+| 影 | `shadow-sm` / `shadow-md` / `shadow-lg` / `shadow-card`（カード既定） |
+| タイポ | `text-display` `text-title` `text-section` `text-metric` `text-body` `text-sub` `text-caption` |
+| イージング | `ease-standard`（`cubic-bezier(0.4, 0, 0.2, 1)`） |
+| ブレークポイント | `md` 768px / `wide` 1200px |
 
-## マテリアル（面の質感）
+### ブランドカラー
 
-単色ベタ塗りは安く見える。macOS / iOS の「上品さ」は次の4つの重ね合わせで出来ている:
+Primary `#68B489` / Hover `#5AA37B` / Light `#EAF7EF` /
+Success `#66C488` / Warning `#F5B247` / Danger `#E86A6A` / Info `#74A9F7`
 
-1. **ごく浅い縦グラデーション** — 上が明るい＝上から光が当たっている
-2. **上辺の内側ハイライト** `inset 0 1px 0 rgb(255 255 255 / .26)` — 面のエッジの反射
-3. **色を持った落ち影** — 黒ではなく、その面の色を暗くした影を使う
-4. **hairline のリング** `inset 0 0 0 .5px` — 輪郭の締まり
+### 塗りボタンは `-solid` を使う
 
-複数プロパティの協調が必要なため、ユーティリティではなく `index.css` の `@layer components` に
-`mat-*` クラスとして持たせている。
+白文字が乗る面は、ブランド値のままでは AA を満たさず、かつ**有効なボタンが「無効化されている」ように
+見えてしまう**（実際に運用でその指摘が出た）。押せる状態がひと目で分かることを優先し、
+白文字が乗る面だけ濃い `-solid` を使う。
 
-| クラス | 用途 |
-|---|---|
-| `mat-primary` / `mat-danger` | 塗りボタン |
-| `mat-secondary` | 白いガラス板のボタン |
-| `mat-surface` | 通常のカード面 |
-| `mat-raised` | 浮くカード（ログイン等）。落ち影を大きく柔らかく |
-| `mat-field` | 入力欄。押せる面ではなく受ける面なのでわずかに凹ませる |
-| `mat-thumb` | Segmented のつまみ |
-| `mat-ambient` | 周辺光のある背景。アクセント色をごく薄く回り込ませる |
+| 用途 | トークン | 白文字とのコントラスト |
+|---|---|---|
+| プライマリボタン | `accent-solid` #3F7D58 | 4.90:1 ✅ |
+| （旧・不採用） | `accent` #68B489 | 2.48:1 ❌ |
+| 危険操作ボタン | `danger-solid` #C93A3A | 5.06:1 ✅ |
+| （旧・不採用） | `danger` #E86A6A | 3.13:1 ❌ |
 
-**hover は `filter: brightness()` で行い、`background-image` を差し替えない。**
-グラデーションはCSSで補間できないため、差し替えると影のトランジションと動きがズレる。
+ブランド値（`accent` `danger`）は **文字が乗らない面**（tint 背景・ボーダー・ドット・ロゴ・
+アクティブなナビの左ライン）に引き続き使い、全体の印象は保つ。
+
+## ボタンの状態
+
+**入力要件を満たすまでボタンは無効にし、満たした瞬間に濃くなる**ようにする。
+「押せるのに何も起きない」「空のまま実行できてしまう」を防ぐ。
+
+- 有効 = `-solid` の濃い塗り + 白文字 / 無効 = 同じ色の 30% + `cursor-not-allowed`
+- hover は `enabled:hover:` を付ける（無効時に色が変わると押せると誤解させるため）
+- `disabled:pointer-events-none` は使わない。カーソル形状で「押せない」ことを伝える
+  （クリックは `disabled` 属性がネイティブに止める）
+- **無効にしたら必ず理由を添える。** 例: 「承認済みの記録がまだありません」「氏名を入力してください」
 
 ## タイポグラフィ
 
-**階層はサイズではなくウェイトと色で作る。** セクション見出し（`text-section`）は本文と同じ 15px で、
-weight 600 と `label` 色によって立たせる。サイズを大きくして段差をつけるのは `text-title` 以上だけ。
+Noto Sans JP（`index.html` で Google Fonts から 400/500/600/700 のみ読み込み）。行間は 1.5〜1.6 倍。
 
-日本語主体のため本文の行間は 1.75 と広め、見出しは `letter-spacing` を詰める。
-`font-feature-settings: 'palt'` で約物を詰める。Webフォントは読み込まない（システムフォントの方が
-ネイティブに馴染み、CloudFront の転送量も増やさない）。
+| 用途 | トークン | 値 |
+|---|---|---|
+| ページタイトル | `text-display` | 32px Bold |
+| セクションタイトル・勤務情報 | `text-title` | 24px Semibold |
+| カードタイトル | `text-section` | 20px Semibold |
+| ダッシュボードの件数 | `text-metric` | 40px Bold |
+| 本文 | `text-body` | 16px Regular |
+| 補助テキスト | `text-sub` | 14px Regular |
+| キャプション | `text-caption` | 12px Regular |
 
-## モーション
+数字は Medium〜Bold。桁が動く数値には `.tabular` を付けて視線の揺れを抑える。
 
-- `duration-150 ease-spring` を基本にする
-- ホバーは**塗りの微変化のみ**。`transform` や影の増加を hover で使わない（安っぽさの原因）
-- `transform` は `:active` の `scale(0.98)` にのみ許す
-- `prefers-reduced-motion: reduce` で全トランジションを無効化（`index.css` に実装済み）
+## レイアウト
 
-## 密度
-
-余白は「多すぎない」ことを重視する。iOS の設定アプリ相当の、密度は高いが息継ぎのあるレイアウト。
-8pt グリッド（4pt 細分）。
+左サイドバー + メインコンテンツの2カラム。**ページタイトルは共通ヘッダー（`Layout`）が
+ルートから解決して出す。各ページは `h1` を持たない。**
 
 | 箇所 | 値 |
 |---|---|
-| コンテナ | `mx-auto max-w-5xl px-5 py-6` |
-| ページ内セクション間 | `space-y-5`（20px） |
-| カード内 padding | 16px（`Card` の既定） |
-| カード内の要素間 | `gap-2` / `gap-3` |
-| フォーム項目間 | `gap-4` |
-| ボタン高さ | `md` 40px / `sm` 32px（タップターゲットの確保） |
+| サイドバー幅 | 240px（`wide` 以上）/ 80px アイコンのみ（`md`〜`wide`） |
+| メイン最大幅 | 1600px |
+| メイン左右余白 | 48px（`wide`）/ 32px（`md`）/ 16px（モバイル） |
+| ヘッダー高さ | 72px（`h-18`） |
+| カード内 padding | 24px（`Card` の既定） |
+| セクション間 | `space-y-8`（32px） |
+| カード間 | `gap-6`（24px） |
+| ボタン高さ | `md` 48px / `sm` 40px |
+| 入力欄高さ | 48px（textarea は最低 160px） |
 
-## 材質
+余白は 8px グリッド。**8 / 16 / 24 / 32 / 40 / 48 / 64 のみ**を使う。
 
-半透明 + ブラー（Liquid Glass の穏当な Web 翻訳）は**共通ヘッダーにだけ**使う。
-スクロール時にコンテンツが透けることで「下に続きがある」ことを示す機能的な意味を持たせる。
-カード・リストなどコンテンツ層には適用しない（iOS 26 でも Liquid Glass はコンテンツ層には当てていない）。
+### レスポンシブ
+
+| 幅 | サイドバー | カード |
+|---|---|---|
+| `wide` 1200px 以上 | 固定・展開（ロゴ + ラベル） | 2〜3カラム |
+| `md`〜`wide` | 折りたたみ・アイコンのみ | 2カラム |
+| `md` 768px 未満 | 廃止 → `BottomNav`（下部ナビ） | 1カラム・アクションボタンは全幅 |
+
+## モーション
+
+- `duration-200 ease-standard` を基本にする
+- ホバーは**色変更のみ**
+- カードのホバーは `translateY(-2px)` まで。押下は `active:scale`
+- モーダルは fade + scale（`dialog-in`）
+- `prefers-reduced-motion: reduce` で全トランジションを無効化（`index.css` に実装済み）
+
+## テーブルを使わない
+
+一覧はすべてカードリストで表現する。スマートフォンでの閲覧しやすさを優先するため。
+利用者行はクリック可能にし、ホバーで背景をわずかにグレーへ、`cursor: pointer`、押下で軽く沈める。
 
 ## プリミティブ
 
 `src/components/ui.tsx` に集約（shadcn/ui は導入しない）:
-`Button` `Card` `Input` `Textarea` `Select` `Label` `ErrorText` `Spinner` `Skeleton` `SkeletonCard` `EmptyState`
+`Button` `Card` `CardTitle` `Input` `Textarea` `Select` `Label` `ErrorText` `Spinner` `Skeleton` `SkeletonCard` `EmptyState`
 
-個別ファイル: `Segmented.tsx`（相互排他な切替）/ `ConfirmDialog.tsx`（破壊的操作の確認。`window.confirm` は使わない）/
-`badges.tsx`（優先度・カテゴリ）/ `AppName.tsx`（アプリ名。ja のみルビ）
+個別ファイル:
+`Sidebar.tsx`（左固定ナビ）/ `BottomNav.tsx`（モバイル下部ナビ）/ `nav.ts`（ナビ定義。両者が共有）/
+`Segmented.tsx`（相互排他な切替）/ `ConfirmDialog.tsx`（破壊的操作の確認。`window.confirm` は使わない）/
+`badges.tsx`（優先度・カテゴリ）/ `AppName.tsx`（アプリ名。ja のみルビ）/ `WabisukeMark.tsx`（ロゴマーク）
 
 `Card` の色替えは `tone` prop（`default` / `warn` / `accent` / `sunken`）で行う。
 `className` で背景色やボーダー色を上書きしない（tailwind-merge を入れていないため、
 同じプロパティのクラスを重ねると CSS 順で勝敗が決まり壊れる）。
 
+アイコンは **Lucide**（`lucide-react`）。線幅 2px、サイズ 20px（`size-5`）に統一する。
+
 ## ローディング・空状態
 
 素の「読み込み中…」テキストは使わない。
 一覧の読み込みは `SkeletonCard`、ボタン内は `Spinner`（色は親から継承）、空は `EmptyState`。
+
+## 見た目の確認（バックエンド不要）
+
+`preview.html` + `src/preview.tsx` は `fetch` をダミー応答に差し替えて `Layout` + `HomePage` を
+そのまま描画する dev 専用エントリ。Cognito ログインもデプロイ済み API も不要。
+
+```
+npm run dev   # → http://localhost:5173/preview.html
+```
+
+本番ビルドの入口は `index.html` のみなので、このファイルは `dist/` には入らない。

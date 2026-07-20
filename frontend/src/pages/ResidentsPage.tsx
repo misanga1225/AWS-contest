@@ -12,6 +12,7 @@ import type { DeleteResidentOutcome } from '../types';
 import {
   Button,
   Card,
+  CardTitle,
   EmptyState,
   ErrorText,
   Input,
@@ -40,6 +41,8 @@ export function ResidentsPage() {
 
   const { register, handleSubmit, reset, formState } = useForm<FormValues>({
     resolver: zodResolver(schema),
+    // onChange: 入力の途中で isValid が更新され、保存ボタンの活性が入力に追従する
+    mode: 'onChange',
     defaultValues: { name: '', room: '', baseline: '' },
   });
 
@@ -51,10 +54,9 @@ export function ResidentsPage() {
   const isEmpty = residents.data && residents.data.length === 0;
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-title text-label">{t('residents.title')}</h1>
-        <div className="flex items-center gap-3">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-end gap-4">
+        <div className="flex items-center gap-4">
           <label className="flex cursor-pointer items-center gap-2 text-sub text-label-2">
             <input
               type="checkbox"
@@ -76,13 +78,13 @@ export function ResidentsPage() {
       </div>
 
       {result && (
-        <p className="rounded-control border-l-2 border-accent-muted bg-accent-tint px-3 py-2 text-sub text-label">
+        <p className="rounded-control border-l-4 border-accent bg-accent-tint px-4 py-3 text-sub text-label">
           {result === 'discharged' ? t('residents.resultDischarged') : t('residents.resultDeleted')}
         </p>
       )}
 
       <Card>
-        <h2 className="mb-4 text-section text-label">{t('residents.add')}</h2>
+        <CardTitle className="mb-6">{t('residents.add')}</CardTitle>
         <form onSubmit={(e) => void onCreate(e)} className="grid gap-4 sm:grid-cols-2">
           <div>
             <Label htmlFor="name">{t('common.name')}</Label>
@@ -98,9 +100,12 @@ export function ResidentsPage() {
             <Textarea id="baseline" rows={2} {...register('baseline')} />
           </div>
           <div className="sm:col-span-2">
-            <Button type="submit" disabled={create.isPending}>
+            <Button type="submit" disabled={create.isPending || !formState.isValid}>
               {t('common.save')}
             </Button>
+            {!formState.isValid && (
+              <span className="ml-3 text-sub text-label-2">{t('residents.needName')}</span>
+            )}
           </div>
         </form>
       </Card>
@@ -120,9 +125,9 @@ export function ResidentsPage() {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <p className="truncate text-section text-label">{r.name}</p>
+                  <p className="truncate text-body font-semibold text-label">{r.name}</p>
                   {r.status === 'discharged' && (
-                    <span className="inline-flex shrink-0 items-center rounded-full border border-separator bg-sunken px-2 py-0.5 text-caption font-medium text-label-2">
+                    <span className="inline-flex shrink-0 items-center rounded-full border border-hairline bg-sunken px-3 h-6 text-caption font-medium text-label-2">
                       {t('residents.dischargedBadge')}
                     </span>
                   )}
