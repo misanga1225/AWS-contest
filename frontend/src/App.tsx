@@ -7,6 +7,7 @@ import type { RuntimeConfig } from './lib/config';
 import { AppProvider } from './lib/appContext';
 import { AuthProvider, useAuth } from './lib/auth';
 import { Layout } from './components/Layout';
+import { Spinner } from './components/ui';
 import { LoginPage } from './pages/LoginPage';
 import { ResidentsPage } from './pages/ResidentsPage';
 import { RecordsPage } from './pages/RecordsPage';
@@ -21,7 +22,11 @@ function AuthGate() {
   const { t } = useTranslation();
 
   if (status === 'loading') {
-    return <p className="p-6 text-slate-500">{t('common.loading')}</p>;
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sub text-label-2">
+        <Spinner label={t('common.loading')} />
+      </div>
+    );
   }
   if (status === 'unauthenticated') {
     return <LoginPage />;
