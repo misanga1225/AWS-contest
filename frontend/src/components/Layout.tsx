@@ -1,13 +1,17 @@
-// 認証後の共通レイアウト: ナビ・フロア選択・言語切替・ログアウト。
-// 装飾はこのナビゲーション層に集中させ、コンテンツ層(カード・リスト)は素朴に保つ (HIG)。
+// 認証後の共通レイアウト: 左サイドバー + メインコンテンツの2カラム構成。
+// ページタイトルはルートから解決してヘッダーに出す (各ページは h1 を持たない)。
 
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { Bell, LogOut, UserRound } from 'lucide-react';
 import { useApp } from '../lib/appContext';
 import { useAuth } from '../lib/auth';
+import { useRecords } from '../lib/queries';
 import type { Lang } from '../types';
-import { AppName } from './AppName';
+import { NAV_ITEMS } from './nav';
+import { BottomNav } from './BottomNav';
 import { Segmented } from './Segmented';
+import { Sidebar } from './Sidebar';
 import { Button, Select } from './ui';
 
 const LANGS: readonly Lang[] = ['ja', 'en', 'vi'];
@@ -17,81 +21,154 @@ export function Layout() {
   const { t, i18n } = useTranslation();
   const { config, floor, setFloor } = useApp();
   const { username, logout } = useAuth();
+  const { pathname } = useLocation();
 
-  // アクティブ表現は塗りつぶしタブではなく、下線インジケータ + accent 文字色。
-  const navClass = ({ isActive }: { isActive: boolean }): string =>
-    [
-      'relative rounded-control px-3 py-2 text-[14px] font-medium outline-none',
-      'transition-[color,background-color,box-shadow] duration-150 ease-spring',
-      'focus-visible:ring-3 focus-visible:ring-accent/30',
-      'after:absolute after:inset-x-3 after:-bottom-px after:h-0.5 after:rounded-full',
-      'after:transition-[background-color] after:duration-150 after:ease-spring',
-      isActive
-        ? 'text-accent after:bg-accent'
-        : 'text-label-2 hover:text-label hover:bg-fill after:bg-transparent',
-    ].join(' ');
+  const current = NAV_ITEMS.find((i) => pathname.startsWith(i.to));
+  const pageTitle = current ? t(`nav.${current.key}`) : t('nav.home');
 
   const currentLang = (LANGS.find((l) => i18n.language.startsWith(l)) ?? 'ja') as Lang;
 
   return (
     <div className="min-h-screen">
-      {/*
-        半透明 + ブラーはここだけに使う。スクロール時にコンテンツが透けることで
-        「下に続きがある」ことを示す機能的な意味を持たせる (honest materiality)。
-      */}
-      <header className="sticky top-0 z-10 border-b border-separator bg-surface/72 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 gap-y-2 px-5 py-2.5">
-          <AppName className="text-[15px] font-semibold tracking-tight text-label" />
+      <Sidebar />
+      <BottomNav />
 
-          <nav className="flex gap-0.5">
-            <NavLink to="/residents" className={navClass}>
-              {t('nav.residents')}
-            </NavLink>
-            <NavLink to="/records" className={navClass}>
-              {t('nav.records')}
-            </NavLink>
-            <NavLink to="/summaries" className={navClass}>
-              {t('nav.summaries')}
-            </NavLink>
-          </nav>
+      {/* サイドバー幅の分だけ本文を寄せる。下部ナビに隠れないよう pb を確保する */}
+      <div className="md:pl-20 wide:pl-60">
+        <div className="mx-auto max-w-[1600px] px-4 pb-24 md:px-8 md:pb-10 wide:px-12">
+          <header className="flex h-18 items-center gap-4">
+            <h1 className="truncate text-title font-bold text-label md:text-display">{pageTitle}</h1>
 
-          <div className="ml-auto flex items-center gap-3">
-            <label className="flex items-center gap-1.5 text-sub text-label-2">
-              {t('common.floor')}
-              <Select
-                value={floor}
-                onChange={(e) => setFloor(e.target.value)}
-                aria-label={t('common.floor')}
-                className="h-8 w-auto py-1 text-sub"
+            <div className="ml-auto flex items-center gap-3">
+              <label className="hidden items-center gap-2 text-sub text-label-2 md:flex">
+                <span className="sr-only wide:not-sr-only">{t('common.floor')}</span>
+                <Select
+                  value={floor}
+                  onChange={(e) => setFloor(e.target.value)}
+                  aria-label={t('common.floor')}
+                  className="h-10 w-auto px-3 text-sub"
+                >
+                  {config.floors.map((f) => (
+                    <option key={f} value={f}>
+                      {f}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+
+              <div className="hidden wide:block">
+                <Segmented
+                  options={LANG_OPTIONS}
+                  value={currentLang}
+                  onChange={(l) => void i18n.changeLanguage(l)}
+                  ariaLabel="language"
+                />
+              </div>
+
+              <NotificationBell />
+
+              <span className="flex items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className="flex size-8 items-center justify-center rounded-full bg-accent-tint text-accent-ink"
+                >
+                  <UserRound strokeWidth={2} className="size-5" />
+                </span>
+                {username && (
+                  <span className="hidden text-sub font-medium text-label md:inline">
+                    {username}
+                  </span>
+                )}
+              </span>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void logout()}
+                aria-label={t('auth.signOut')}
               >
-                {config.floors.map((f) => (
-                  <option key={f} value={f}>
-                    {f}
-                  </option>
-                ))}
-              </Select>
-            </label>
+                <LogOut aria-hidden="true" />
+                <span className="hidden wide:inline">{t('auth.signOut')}</span>
+              </Button>
+            </div>
+          </header>
 
-            <Segmented
-              options={LANG_OPTIONS}
-              value={currentLang}
-              onChange={(l) => void i18n.changeLanguage(l)}
-              ariaLabel="language"
-            />
+          {/* モバイルはヘッダーに入りきらないフロア切替をここに出す */}
+          <label className="mb-4 flex items-center gap-2 text-sub text-label-2 md:hidden">
+            {t('common.floor')}
+            <Select
+              value={floor}
+              onChange={(e) => setFloor(e.target.value)}
+              aria-label={t('common.floor')}
+              className="h-10 w-auto px-3 text-sub"
+            >
+              {config.floors.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+            </Select>
+          </label>
 
-            <span className="h-4 w-px bg-separator" aria-hidden="true" />
-
-            {username && <span className="text-sub text-label-2">{username}</span>}
-            <Button variant="ghost" size="sm" onClick={() => void logout()}>
-              {t('auth.signOut')}
-            </Button>
-          </div>
+          <main>
+            <Outlet />
+          </main>
         </div>
-      </header>
+      </div>
+    </div>
+  );
+}
 
-      <main className="mx-auto max-w-5xl px-5 py-6">
-        <Outlet />
-      </main>
+/**
+ * 通知ベル。未承認の下書き件数を出し、押すとケアメモ画面へ移動する。
+ * 「承認待ちが溜まっていること」は見落とすと申し送りが欠けるため、常時視界に置く。
+ * (通知基盤は無いので、既存の記録データだけで成立する範囲に留めている)
+ */
+function NotificationBell() {
+  const { t } = useTranslation();
+  const { floor } = useApp();
+  const navigate = useNavigate();
+  const drafts = useRecords({ floor, status: 'draft' });
+  const count = drafts.data?.length ?? 0;
+
+  return (
+    <button
+      type="button"
+      onClick={() => void navigate('/records')}
+      // 件数を読み上げに含める。ドットだけでは何件か分からないため
+      aria-label={
+        count > 0
+          ? `${t('common.notifications')}: ${t('home.unapproved')} ${count}`
+          : t('common.notifications')
+      }
+      className="relative flex size-10 items-center justify-center rounded-control text-label-2 outline-none transition-colors duration-200 ease-standard hover:bg-fill hover:text-label focus-visible:ring-3 focus-visible:ring-accent/40"
+    >
+      <Bell aria-hidden="true" strokeWidth={2} className="size-5" />
+      {count > 0 && (
+        <span
+          aria-hidden="true"
+          className="tabular absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-white"
+        >
+          {count > 99 ? '99+' : count}
+        </span>
+      )}
+    </button>
+  );
+}
+
+/** 未実装メニュー用の「準備中」ページ。行き止まりにせず実装済み画面へ導線を残す。 */
+export function PlaceholderPage({ titleKey, bodyKey }: { titleKey: string; bodyKey: string }) {
+  const { t } = useTranslation();
+  return (
+    <div className="rounded-card border border-dashed border-separator bg-surface/60 px-6 py-16 text-center">
+      <p className="text-section text-label">{t(titleKey)}</p>
+      <p className="mx-auto mt-2 max-w-md text-sub text-label-2">{t(bodyKey)}</p>
+      <NavLink
+        to="/home"
+        className="mt-6 inline-flex items-center gap-1 rounded-control px-2 py-1 text-sub font-medium text-accent-ink outline-none transition-colors duration-200 ease-standard hover:text-accent-hover focus-visible:ring-3 focus-visible:ring-accent/40"
+      >
+        {t('common.backToHome')} ›
+      </NavLink>
     </div>
   );
 }

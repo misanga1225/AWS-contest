@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  <!-- 侘助(椿)を抽象化したマーク。花弁5枚 + 蕊。アクセント色 #a6415a -->
-  <rect width="32" height="32" rx="7" fill="#a6415a"/>
+  <!-- 侘助(椿)を抽象化したマーク。花弁5枚 + 蕊。ブランドグリーン #68b489 -->
+  <rect width="32" height="32" rx="7" fill="#68b489"/>
   <g fill="#ffffff" fill-opacity=".92">
     <circle cx="16" cy="9.4" r="5.3"/>
     <circle cx="22.3" cy="13.9" r="5.3"/>
@@ -8,5 +8,5 @@
     <circle cx="12.1" cy="21.4" r="5.3"/>
     <circle cx="9.7" cy="13.9" r="5.3"/>
   </g>
-  <circle cx="16" cy="16" r="3.4" fill="#a6415a"/>
+  <circle cx="16" cy="16" r="3.4" fill="#68b489"/>
 </svg>

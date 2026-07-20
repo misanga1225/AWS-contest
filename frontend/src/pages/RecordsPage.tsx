@@ -11,6 +11,7 @@ import { CategoryBadge } from '../components/badges';
 import {
   Button,
   Card,
+  CardTitle,
   EmptyState,
   ErrorText,
   Label,
@@ -32,16 +33,15 @@ export function RecordsPage() {
   const approved = records.data?.filter((r) => r.status === 'approved') ?? [];
 
   return (
-    <div className="space-y-5">
-      <h1 className="text-title text-label">{t('records.title')}</h1>
-
+    <div className="space-y-6">
+      {/* ページタイトルは共通ヘッダーが出す (Layout がルートから解決) */}
       {/* 新規投稿先は在籍者のみ。退所者に新しい記録は書けない */}
       <ComposeCard
         floor={floor}
         residents={(residents.data ?? []).filter((r) => r.status === 'active')}
       />
 
-      <section className="space-y-3">
+      <section className="space-y-4">
         <SectionHeading label={t('records.listDraft')} count={drafts.length} />
         {drafts.length === 0 && <EmptyState message={t('records.empty')} />}
         {drafts.map((rec) => (
@@ -104,11 +104,11 @@ function ComposeCard({ floor, residents }: { floor: string; residents: Resident[
   if (residents.length === 0) {
     return (
       <Card>
-        <h2 className="mb-2 text-section text-label">{t('records.compose')}</h2>
+        <CardTitle className="mb-2">{t('records.compose')}</CardTitle>
         <p className="text-sub text-label-2">{t('records.noResidents')}</p>
         <Link
           to="/residents"
-          className="mt-3 inline-flex items-center gap-1 rounded-control text-sub text-accent outline-none transition-colors duration-150 ease-spring hover:text-accent-hover focus-visible:ring-3 focus-visible:ring-accent/30"
+          className="mt-4 inline-flex items-center gap-1 rounded-control px-2 py-1 text-sub font-medium text-accent-ink outline-none transition-colors duration-200 ease-standard hover:text-accent-hover focus-visible:ring-3 focus-visible:ring-accent/40"
         >
           {t('records.goToResidents')} ›
         </Link>
@@ -118,7 +118,7 @@ function ComposeCard({ floor, residents }: { floor: string; residents: Resident[
 
   return (
     <Card>
-      <h2 className="mb-4 text-section text-label">{t('records.compose')}</h2>
+      <CardTitle className="mb-6">{t('records.compose')}</CardTitle>
       <div className="space-y-4">
         <div>
           <Label htmlFor="resident">{t('records.resident')}</Label>
@@ -191,7 +191,7 @@ function DraftCard({
 
   return (
     <Card tone="warn">
-      <p className="mb-4 flex items-center gap-1.5 text-section text-warn">
+      <p className="mb-4 flex items-center gap-2 text-section text-warn-ink">
         <span aria-hidden="true" className="size-1.5 rounded-full bg-warn" />
         {t('records.draftTitle')}
       </p>

@@ -23,7 +23,7 @@ export function Segmented<T extends string>({
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className="inline-flex items-center gap-0.5 rounded-control bg-fill p-0.5 shadow-[inset_0_1px_2px_rgb(28_27_26/0.06)]"
+      className="inline-flex items-center gap-0.5 rounded-control bg-sunken p-0.5"
     >
       {options.map((opt) => {
         const selected = opt.value === value;
@@ -35,12 +35,12 @@ export function Segmented<T extends string>({
             aria-checked={selected}
             onClick={() => onChange(opt.value)}
             className={cn(
-              'rounded-[6px] px-3 py-1.5 text-sub font-medium outline-none',
-              'transition-[background-color,color,box-shadow] duration-150 ease-spring',
-              'focus-visible:ring-3 focus-visible:ring-accent/30',
+              'rounded-[8px] px-3 py-1.5 text-sub font-medium outline-none',
+              'transition-colors duration-200 ease-standard',
+              'focus-visible:ring-3 focus-visible:ring-accent/40',
               selected
-                ? // 選択中だけ「つまみ」として 1 段持ち上げる (iOS のセグメンテッドコントロール相当)
-                  'mat-thumb text-label'
+                ? // 選択中は白いつまみ。フラットなので影ではなく塗りの差で示す
+                  'bg-surface text-label shadow-sm'
                 : 'text-label-2 hover:text-label',
             )}
           >

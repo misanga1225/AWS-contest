@@ -11,9 +11,11 @@
   - `domain` — serde共有型（CareRecord, Resident, HandoverSummary）。schema_version + serde default で前方互換
   - `api` — API Lambda（lambda_http + axum。記録の投稿・承認・一覧、利用者CRUD、サマリ取得の全RESTルート集約）
   - `summarizer` — 要約Lambda（EventBridge Schedulerのシフト終了トリガ + 手動トリガ）
-- `frontend/` — Vite + React + TypeScript SPA（React Router, TanStack Query, Tailwind CSS v4, react-hook-form + zod, react-i18next (ja/en/vi), aws-amplify v6 は Auth モジュールのみ）
+- `frontend/` — Vite + React + TypeScript SPA（React Router, TanStack Query, Tailwind CSS v4, react-hook-form + zod, react-i18next (ja/en/vi), lucide-react, aws-amplify v6 は Auth モジュールのみ）
   - UIは shadcn/ui を導入せず `components/ui.tsx` に自前のプリミティブを置く（依存を増やさないため）
-  - デザインはApple HIG準拠。色・角丸・タイポ・イージングは `src/index.css` の `@theme` セマンティックトークン経由でのみ参照する。詳細は `docs/design.md`
+  - デザインはフラット。ブランドグリーン基調で、色・角丸・タイポ・イージングは `src/index.css` の `@theme` セマンティックトークン経由でのみ参照する。詳細は `docs/design.md`、参照モックは `docs/UI.png`
+  - レイアウトは左サイドバー + メイン。ページタイトルは共通ヘッダー(`Layout`)がルートから解決するため、各ページは `h1` を持たない
+  - アイコンは Lucide。線幅2px・`size-5` に統一し、必ずテキストラベル（不可なら `aria-label` + `sr-only`）を併記する
 - `infra/` — CDK (TypeScript) + cargo-lambda-cdk
 
 ## コマンド
@@ -26,7 +28,7 @@
 - `cargo lambda watch` — Lambdaローカル起動（動作確認用）
 
 ### フロントエンド (frontend/)
-- `npm run dev` — 開発サーバー
+- `npm run dev` — 開発サーバー（`/preview.html` はバックエンド不要でホーム画面の見た目を確認できる dev 専用エントリ）
 - `npm run build` — プロダクションビルド
 - `npx vitest run` — テスト
 - `npm run lint` — ESLint
@@ -55,7 +57,9 @@
 - 利用者の削除は論理削除（退所 = `status: discharged`）。ケア記録に法定保存義務があるため。記録が1件も無い場合のみ物理削除する。詳細は .claude/rules/db.md
 - 設定値（シフト時刻・テーブル名等）はSSM Parameter Store。ハードコード禁止
 - フロントエンドの型は `any` 禁止。API応答には必ず型を定義する
-- UIの色は `src/index.css` の `@theme` セマンティックトークン経由で参照する。`slate-*` `sky-*` 等のTailwindデフォルトパレット直書きは禁止（docs/design.md）
+- UIの色は `src/index.css` の `@theme` セマンティックトークン経由で参照する。`slate-*` `green-*` 等のTailwindデフォルトパレット直書きは禁止（docs/design.md）
+- 文字色には `-ink` 系トークンを使う。ブランド値（`accent` `danger` `warn` `success`）は明るく、白・tint 背景でコントラスト比 4.5:1 に届かない。面にはブランド値、文字には `-ink`
+- 余白は8pxグリッド（8/16/24/32/40/48/64）のみ。一覧は `<table>` を使わずカードリストで表現する
 - `focus:outline-none` の単独指定は禁止。必ず `focus-visible` リングを伴わせる
 - テストトロフィー: ユニットテストよりも統合テストを優先する
 

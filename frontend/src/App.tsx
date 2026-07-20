@@ -6,9 +6,11 @@ import { useTranslation } from 'react-i18next';
 import type { RuntimeConfig } from './lib/config';
 import { AppProvider } from './lib/appContext';
 import { AuthProvider, useAuth } from './lib/auth';
-import { Layout } from './components/Layout';
+import { Layout, PlaceholderPage } from './components/Layout';
 import { Spinner } from './components/ui';
 import { LoginPage } from './pages/LoginPage';
+import { HomePage } from './pages/HomePage';
+import { BaselinePage } from './pages/BaselinePage';
 import { ResidentsPage } from './pages/ResidentsPage';
 import { RecordsPage } from './pages/RecordsPage';
 import { SummariesPage } from './pages/SummariesPage';
@@ -34,10 +36,25 @@ function AuthGate() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route path="/residents" element={<ResidentsPage />} />
+        <Route path="/home" element={<HomePage />} />
         <Route path="/records" element={<RecordsPage />} />
         <Route path="/summaries" element={<SummariesPage />} />
-        <Route path="*" element={<Navigate to="/residents" replace />} />
+        <Route path="/residents" element={<ResidentsPage />} />
+        <Route path="/baseline" element={<BaselinePage />} />
+        {/* 未実装メニュー。ナビは仕様どおり8項目出し、中身は準備中を明示する */}
+        <Route
+          path="/schedule"
+          element={<PlaceholderPage titleKey="nav.schedule" bodyKey="placeholder.schedule" />}
+        />
+        <Route
+          path="/reports"
+          element={<PlaceholderPage titleKey="nav.reports" bodyKey="placeholder.reports" />}
+        />
+        <Route
+          path="/settings"
+          element={<PlaceholderPage titleKey="nav.settings" bodyKey="placeholder.settings" />}
+        />
+        <Route path="*" element={<Navigate to="/home" replace />} />
       </Route>
     </Routes>
   );
