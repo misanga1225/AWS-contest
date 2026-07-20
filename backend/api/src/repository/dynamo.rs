@@ -18,11 +18,17 @@ use super::{RepoError, Repository};
 pub struct DynamoRepository {
     client: Client,
     table: String,
+    /// 利用者別時系列 GSI の名前 (infra が env 経由で注入)。
+    index: String,
 }
 
 impl DynamoRepository {
-    pub fn new(client: Client, table: String) -> Self {
-        Self { client, table }
+    pub fn new(client: Client, table: String, index: String) -> Self {
+        Self {
+            client,
+            table,
+            index,
+        }
     }
 
     /// domain 値をアイテム化し、キー属性を付加して put する。
@@ -169,6 +175,25 @@ impl Repository for DynamoRepository {
     async fn list_records_by_floor(&self, floor: &str) -> Result<Vec<CareRecord>, RepoError> {
         self.query_begins_with(keys::floor_pk(floor), keys::RECORD_SK_PREFIX)
             .await
+    }
+
+    async fn has_records_for_resident(&self, resident_id: &str) -> Result<bool, RepoError> {
+        // GSI1 (PK=RESIDENT#{id}) を Limit 1 で引く。存在確認だけなので件数は数えない。
+        let resp = self
+            .client
+            .query()
+            .table_name(&self.table)
+            .index_name(&self.index)
+            .key_condition_expression("GSI1PK = :pk")
+            .expression_attribute_values(
+                ":pk",
+                AttributeValue::S(keys::resident_gsi1_pk(resident_id)),
+            )
+            .limit(1)
+            .send()
+            .await
+            .map_err(|e| RepoError::Dynamo(e.to_string()))?;
+        Ok(resp.items.is_some_and(|items| !items.is_empty()))
     }
 
     async fn put_resident(&self, resident: &Resident) -> Result<(), RepoError> {

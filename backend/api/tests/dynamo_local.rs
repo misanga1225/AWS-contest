@@ -15,7 +15,8 @@ use aws_sdk_dynamodb::types::{
     ProjectionType, ScalarAttributeType,
 };
 use domain::{
-    CareRecord, Category, HandoverSummary, Priority, RecordStatus, Resident, SummaryItem,
+    CareRecord, Category, HandoverSummary, Priority, RecordStatus, Resident, ResidentStatus,
+    SummaryItem,
 };
 
 fn client(endpoint: &str) -> Client {
@@ -86,6 +87,8 @@ fn sample_resident(floor: &str, id: &str) -> Resident {
         room: format!("{floor}01"),
         baseline: "平常時情報".to_string(),
         created_at: "2026-07-19T00:00:00Z".to_string(),
+        status: ResidentStatus::Active,
+        discharged_at: None,
     }
 }
 
@@ -117,7 +120,7 @@ async fn dynamo_local_round_trip() {
     let table = format!("handover-test-{}", ulid_like());
     let client = client(&endpoint);
     create_table(&client, &table).await;
-    let repo = DynamoRepository::new(client, table);
+    let repo = DynamoRepository::new(client, table, "GSI1".to_string());
 
     // 利用者: put → get → list
     let resident = sample_resident("3", "r1");

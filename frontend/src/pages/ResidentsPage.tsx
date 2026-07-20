@@ -1,17 +1,24 @@
 // 利用者マスタ画面: 一覧・デモデータ初期化・追加(react-hook-form + zod)・削除。
 
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
 import { useApp } from '../lib/appContext';
+import { useCreateResident, useDeleteResident, useResidents, useSeedDemo } from '../lib/queries';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import type { DeleteResidentOutcome } from '../types';
 import {
-  useCreateResident,
-  useDeleteResident,
-  useResidents,
-  useSeedDemo,
-} from '../lib/queries';
-import { Button, Card, ErrorText, Input, Label, Textarea } from '../components/ui';
+  Button,
+  Card,
+  EmptyState,
+  ErrorText,
+  Input,
+  Label,
+  SkeletonCard,
+  Textarea,
+} from '../components/ui';
 
 const schema = z.object({
   name: z.string().min(1),
@@ -23,7 +30,10 @@ type FormValues = z.infer<typeof schema>;
 export function ResidentsPage() {
   const { t } = useTranslation();
   const { floor } = useApp();
-  const residents = useResidents(floor);
+  const [showDischarged, setShowDischarged] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [result, setResult] = useState<DeleteResidentOutcome | null>(null);
+  const residents = useResidents(floor, showDischarged);
   const seed = useSeedDemo();
   const create = useCreateResident();
   const remove = useDeleteResident();
@@ -38,22 +48,42 @@ export function ResidentsPage() {
     reset();
   });
 
+  const isEmpty = residents.data && residents.data.length === 0;
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-800">{t('residents.title')}</h1>
-        <Button
-          variant="secondary"
-          disabled={seed.isPending}
-          onClick={() => void seed.mutateAsync(undefined)}
-        >
-          {t('residents.seedDemo')}
-        </Button>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-title text-label">{t('residents.title')}</h1>
+        <div className="flex items-center gap-3">
+          <label className="flex cursor-pointer items-center gap-2 text-sub text-label-2">
+            <input
+              type="checkbox"
+              checked={showDischarged}
+              onChange={(e) => setShowDischarged(e.target.checked)}
+              className="size-4 accent-accent"
+            />
+            {t('residents.showDischarged')}
+          </label>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={seed.isPending}
+            onClick={() => void seed.mutateAsync(undefined)}
+          >
+            {t('residents.seedDemo')}
+          </Button>
+        </div>
       </div>
 
+      {result && (
+        <p className="rounded-control border-l-2 border-accent-muted bg-accent-tint px-3 py-2 text-sub text-label">
+          {result === 'discharged' ? t('residents.resultDischarged') : t('residents.resultDeleted')}
+        </p>
+      )}
+
       <Card>
-        <h2 className="mb-3 font-semibold text-slate-700">{t('residents.add')}</h2>
-        <form onSubmit={(e) => void onCreate(e)} className="grid gap-3 sm:grid-cols-2">
+        <h2 className="mb-4 text-section text-label">{t('residents.add')}</h2>
+        <form onSubmit={(e) => void onCreate(e)} className="grid gap-4 sm:grid-cols-2">
           <div>
             <Label htmlFor="name">{t('common.name')}</Label>
             <Input id="name" {...register('name')} />
@@ -67,7 +97,7 @@ export function ResidentsPage() {
             <Label htmlFor="baseline">{t('residents.baseline')}</Label>
             <Textarea id="baseline" rows={2} {...register('baseline')} />
           </div>
-          <div>
+          <div className="sm:col-span-2">
             <Button type="submit" disabled={create.isPending}>
               {t('common.save')}
             </Button>
@@ -75,37 +105,66 @@ export function ResidentsPage() {
         </form>
       </Card>
 
-      {residents.isLoading && <p className="text-slate-500">{t('common.loading')}</p>}
-      {residents.isError && <ErrorText>{t('common.error')}</ErrorText>}
-      {residents.data && residents.data.length === 0 && (
-        <p className="text-slate-500">{t('residents.empty')}</p>
+      {residents.isLoading && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
       )}
+      {residents.isError && <ErrorText>{t('common.error')}</ErrorText>}
+      {isEmpty && <EmptyState message={t('residents.empty')} />}
 
       <div className="grid gap-3 sm:grid-cols-2">
         {residents.data?.map((r) => (
           <Card key={r.id}>
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="font-semibold text-slate-800">{r.name}</p>
-                <p className="text-sm text-slate-500">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="truncate text-section text-label">{r.name}</p>
+                  {r.status === 'discharged' && (
+                    <span className="inline-flex shrink-0 items-center rounded-full border border-separator bg-sunken px-2 py-0.5 text-caption font-medium text-label-2">
+                      {t('residents.dischargedBadge')}
+                    </span>
+                  )}
+                </div>
+                <p className="text-sub text-label-2">
                   {t('common.room')}: {r.room}
                 </p>
+                {r.discharged_at && (
+                  <p className="text-caption tabular-nums text-label-3">
+                    {t('residents.dischargedAt')}: {r.discharged_at}
+                  </p>
+                )}
               </div>
-              <Button
-                variant="danger"
-                onClick={() => {
-                  if (window.confirm(t('residents.confirmDelete'))) {
-                    void remove.mutateAsync({ id: r.id, floor });
-                  }
-                }}
-              >
-                {t('common.delete')}
-              </Button>
+              {r.status === 'active' && (
+                <Button variant="ghost" size="sm" onClick={() => setPendingDelete(r.id)}>
+                  {t('residents.discharge')}
+                </Button>
+              )}
             </div>
-            {r.baseline && <p className="mt-2 text-sm text-slate-600">{r.baseline}</p>}
+            {r.baseline && <p className="mt-3 text-sub text-label-2">{r.baseline}</p>}
           </Card>
         ))}
       </div>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={t('residents.confirmDelete')}
+        message={t('residents.confirmDeleteBody')}
+        confirmLabel={t('residents.discharge')}
+        cancelLabel={t('common.cancel')}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          const id = pendingDelete;
+          setPendingDelete(null);
+          if (id === null) return;
+          // 記録の有無でサーバ側が物理削除/退所を決めるため、結果を受けて表示を出し分ける
+          void remove
+            .mutateAsync({ id, floor })
+            .then((res) => setResult(res.outcome))
+            .catch(() => setResult(null));
+        }}
+      />
     </div>
   );
 }

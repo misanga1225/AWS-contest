@@ -1,30 +1,49 @@
 // 認証後の共通レイアウト: ナビ・フロア選択・言語切替・ログアウト。
+// 装飾はこのナビゲーション層に集中させ、コンテンツ層(カード・リスト)は素朴に保つ (HIG)。
 
 import { NavLink, Outlet } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useApp } from '../lib/appContext';
 import { useAuth } from '../lib/auth';
 import type { Lang } from '../types';
+import { AppName } from './AppName';
+import { Segmented } from './Segmented';
 import { Button, Select } from './ui';
 
 const LANGS: readonly Lang[] = ['ja', 'en', 'vi'];
+const LANG_OPTIONS = LANGS.map((l) => ({ value: l, label: l.toUpperCase() }));
 
 export function Layout() {
   const { t, i18n } = useTranslation();
   const { config, floor, setFloor } = useApp();
   const { username, logout } = useAuth();
 
+  // アクティブ表現は塗りつぶしタブではなく、下線インジケータ + accent 文字色。
   const navClass = ({ isActive }: { isActive: boolean }): string =>
-    `rounded-md px-3 py-2 text-sm font-medium ${
-      isActive ? 'bg-sky-600 text-white' : 'text-slate-700 hover:bg-slate-100'
-    }`;
+    [
+      'relative rounded-control px-3 py-2 text-[14px] font-medium outline-none',
+      'transition-[color,background-color,box-shadow] duration-150 ease-spring',
+      'focus-visible:ring-3 focus-visible:ring-accent/30',
+      'after:absolute after:inset-x-3 after:-bottom-px after:h-0.5 after:rounded-full',
+      'after:transition-[background-color] after:duration-150 after:ease-spring',
+      isActive
+        ? 'text-accent after:bg-accent'
+        : 'text-label-2 hover:text-label hover:bg-fill after:bg-transparent',
+    ].join(' ');
+
+  const currentLang = (LANGS.find((l) => i18n.language.startsWith(l)) ?? 'ja') as Lang;
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-3 px-4 py-3">
-          <span className="text-lg font-bold text-sky-700">{t('appName')}</span>
-          <nav className="flex gap-1">
+      {/*
+        半透明 + ブラーはここだけに使う。スクロール時にコンテンツが透けることで
+        「下に続きがある」ことを示す機能的な意味を持たせる (honest materiality)。
+      */}
+      <header className="sticky top-0 z-10 border-b border-separator bg-surface/72 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 gap-y-2 px-5 py-2.5">
+          <AppName className="text-[15px] font-semibold tracking-tight text-label" />
+
+          <nav className="flex gap-0.5">
             <NavLink to="/residents" className={navClass}>
               {t('nav.residents')}
             </NavLink>
@@ -35,34 +54,42 @@ export function Layout() {
               {t('nav.summaries')}
             </NavLink>
           </nav>
-          <div className="ml-auto flex items-center gap-2">
-            <label className="text-sm text-slate-600">{t('common.floor')}</label>
-            <Select value={floor} onChange={(e) => setFloor(e.target.value)} aria-label="floor">
-              {config.floors.map((f) => (
-                <option key={f} value={f}>
-                  {f}
-                </option>
-              ))}
-            </Select>
-            <Select
-              value={i18n.language}
-              onChange={(e) => void i18n.changeLanguage(e.target.value)}
-              aria-label="language"
-            >
-              {LANGS.map((l) => (
-                <option key={l} value={l}>
-                  {l.toUpperCase()}
-                </option>
-              ))}
-            </Select>
-            {username && <span className="text-sm text-slate-500">{username}</span>}
-            <Button variant="ghost" onClick={() => void logout()}>
+
+          <div className="ml-auto flex items-center gap-3">
+            <label className="flex items-center gap-1.5 text-sub text-label-2">
+              {t('common.floor')}
+              <Select
+                value={floor}
+                onChange={(e) => setFloor(e.target.value)}
+                aria-label={t('common.floor')}
+                className="h-8 w-auto py-1 text-sub"
+              >
+                {config.floors.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+              </Select>
+            </label>
+
+            <Segmented
+              options={LANG_OPTIONS}
+              value={currentLang}
+              onChange={(l) => void i18n.changeLanguage(l)}
+              ariaLabel="language"
+            />
+
+            <span className="h-4 w-px bg-separator" aria-hidden="true" />
+
+            {username && <span className="text-sub text-label-2">{username}</span>}
+            <Button variant="ghost" size="sm" onClick={() => void logout()}>
               {t('auth.signOut')}
             </Button>
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-6">
+
+      <main className="mx-auto max-w-5xl px-5 py-6">
         <Outlet />
       </main>
     </div>

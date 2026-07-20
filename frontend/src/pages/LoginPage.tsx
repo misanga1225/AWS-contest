@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../lib/auth';
+import { AppName } from '../components/AppName';
 import { Button, Card, ErrorText, Input, Label } from '../components/ui';
 
 export function LoginPage() {
@@ -27,37 +28,41 @@ export function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <Card className="w-full max-w-sm">
-        <h1 className="mb-4 text-xl font-bold text-slate-800">{t('appName')}</h1>
-        <form onSubmit={(e) => void onSubmit(e)} className="space-y-3">
-          <div>
-            <Label htmlFor="username">{t('auth.username')}</Label>
-            <Input
-              id="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoComplete="username"
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="password">{t('auth.password')}</Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
-          </div>
-          {error && <ErrorText>{error}</ErrorText>}
-          <Button type="submit" disabled={busy} className="w-full">
-            {busy ? t('auth.signingIn') : t('auth.signIn')}
-          </Button>
-        </form>
-      </Card>
+    <div className="mat-ambient flex min-h-screen items-center justify-center px-5 py-10">
+      <div className="w-full max-w-sm">
+        <h1 className="mb-6 text-center">
+          <AppName className="text-display text-label" />
+        </h1>
+        <Card className="mat-raised p-6">
+          <form onSubmit={(e) => void onSubmit(e)} className="space-y-4">
+            <div>
+              <Label htmlFor="username">{t('auth.username')}</Label>
+              <Input
+                id="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoComplete="username"
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="password">{t('auth.password')}</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
+            </div>
+            {error && <ErrorText>{error}</ErrorText>}
+            <Button type="submit" disabled={busy} className="w-full">
+              {busy ? t('auth.signingIn') : t('auth.signIn')}
+            </Button>
+          </form>
+        </Card>
+      </div>
     </div>
   );
 }

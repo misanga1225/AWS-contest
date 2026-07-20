@@ -19,6 +19,8 @@ import { Construct } from 'constructs';
 
 const BACKEND_DIR = path.join(__dirname, '..', '..', 'backend');
 const FRONTEND_DIST = path.join(__dirname, '..', '..', 'frontend', 'dist');
+/** 利用者別時系列 GSI の名前。Lambda には INDEX_NAME として注入する（backend 側でハードコードしない） */
+const RESIDENT_INDEX_NAME = 'GSI1';
 
 /**
  * 設定値は SSM Parameter Store を単一の情報源とする。CDK コード内に magic string を
@@ -73,7 +75,7 @@ export class HandoverStack extends cdk.Stack {
 
     // GSI1: 利用者別時系列 (PK=RESIDENT#{id}, SK=RECORD#{ts}#{id})
     table.addGlobalSecondaryIndex({
-      indexName: 'GSI1',
+      indexName: RESIDENT_INDEX_NAME,
       partitionKey: { name: 'GSI1PK', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'GSI1SK', type: dynamodb.AttributeType.STRING },
     });
@@ -83,6 +85,7 @@ export class HandoverStack extends cdk.Stack {
     // ---------------------------------------------------------------------
     const commonEnv: Record<string, string> = {
       TABLE_NAME: table.tableName,
+      INDEX_NAME: RESIDENT_INDEX_NAME,
       BEDROCK_MODEL_ID: settings.bedrockModelId,
       SHIFT_DAY_START: settings.shiftDayStart,
       SHIFT_DAY_END: settings.shiftDayEnd,

@@ -26,29 +26,23 @@ pub enum LlmError {
     EmptyResponse,
 }
 
-/// 構造化の入力。母語入力の原文と、フロアの利用者一覧 (突合候補) を渡す。
+/// 構造化の入力。母語入力の原文のみを渡す。
+///
+/// 対象利用者は職員が画面で選ぶ。LLM に「誰の記録か」を推定させない:
+/// 同定推論は「転記・要約・整形」の範囲を超えるうえ、自動入力された尤もらしい氏名は
+/// 承認を形骸化させ、取り違えが確認をすり抜ける。利用者の氏名を LLM に送らずに済む
+/// という副次効果もある。
 #[derive(Debug, Clone)]
 pub struct StructureRequest {
     /// 職員が入力した原文 (母語の可能性あり)
     pub text: String,
-    /// 突合候補の利用者 (id と氏名)。LLM はこの中から resident_id を選ぶ
-    pub residents: Vec<ResidentBrief>,
-}
-
-/// 突合用の利用者概要。
-#[derive(Debug, Clone, Serialize)]
-pub struct ResidentBrief {
-    pub id: String,
-    pub name: String,
-    pub room: String,
 }
 
 /// 構造化の結果 (LLM 出力)。確定ではなく draft の材料。
+///
+/// 利用者はここに含めない (職員の選択が唯一の情報源)。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StructuredCareMemo {
-    /// 提示リストから選ばれた利用者 id。特定できなければ None (職員が補う)
-    #[serde(default)]
-    pub resident_id: Option<String>,
     pub category: Category,
     /// 正規化された日本語本文
     pub body_ja: String,

@@ -3,7 +3,7 @@
 //! id は `demo-{floor}-{n}` の固定値にして冪等 (再実行で重複せず上書き) にする。
 //! 個人情報は架空。実データ投入には使わない。
 
-use domain::Resident;
+use domain::{Resident, ResidentStatus};
 
 use crate::error::ApiError;
 use crate::repository::Repository;
@@ -53,6 +53,8 @@ pub async fn seed(repo: &dyn Repository, floors: &[String]) -> Result<Vec<Reside
                 room: format!("{floor}{room}"),
                 baseline: (*baseline).to_string(),
                 created_at: created_at.clone(),
+                status: ResidentStatus::Active,
+                discharged_at: None,
             };
             repo.put_resident(&resident).await?;
             created.push(resident);

@@ -18,8 +18,11 @@ use crate::state::AppState;
 #[derive(Debug, Deserialize)]
 pub struct CreateBody {
     pub floor: String,
+    /// 対象利用者。必須 (LLM に推定させない)。
+    /// 欠落時も serde で空文字にし、services 層の検証で 400 + 明確なメッセージを返す
+    /// (axum の JSON 拒否による 422 だと理由が伝わらないため)。
     #[serde(default)]
-    pub resident_id: Option<String>,
+    pub resident_id: String,
     pub text: String,
 }
 

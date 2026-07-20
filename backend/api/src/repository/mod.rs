@@ -46,6 +46,12 @@ pub trait Repository: Send + Sync {
     /// フロアの全記録を時系列で取得する (`begins_with(SK, "RECORD#")`)。
     async fn list_records_by_floor(&self, floor: &str) -> Result<Vec<CareRecord>, RepoError>;
 
+    /// 指定利用者の記録が 1 件でも存在するか (GSI1 を Limit 1 で引く)。
+    ///
+    /// 利用者削除時に、物理削除してよいか (記録なし) / 退所扱いにすべきか (記録あり) を
+    /// 判定するために使う。件数は不要なので全件取得はしない。
+    async fn has_records_for_resident(&self, resident_id: &str) -> Result<bool, RepoError>;
+
     // --- 利用者 ---
     async fn put_resident(&self, resident: &Resident) -> Result<(), RepoError>;
     async fn get_resident(&self, floor: &str, id: &str) -> Result<Option<Resident>, RepoError>;

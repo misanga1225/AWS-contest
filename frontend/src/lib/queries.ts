@@ -11,11 +11,15 @@ import type {
 } from './api';
 
 // --- 利用者 ---
-export function useResidents(floor: string) {
+/**
+ * フロアの利用者一覧。既定では在籍中のみ。
+ * `includeDischarged` で退所者も含める (過去記録の氏名解決に使う)。
+ */
+export function useResidents(floor: string, includeDischarged = false) {
   const api = useApi();
   return useQuery({
-    queryKey: ['residents', floor],
-    queryFn: () => api.listResidents(floor),
+    queryKey: ['residents', floor, includeDischarged],
+    queryFn: () => api.listResidents(floor, includeDischarged),
   });
 }
 

@@ -46,6 +46,22 @@ pub enum RecordStatus {
     Approved,
 }
 
+/// 利用者の在籍状態。
+///
+/// ケア記録には法定の保存義務 (介護保険法: 完結の日から2年、自治体条例で5年の場合あり) が
+/// あり、記録が参照する利用者を物理削除すると「誰の記録か分からない」状態になる。
+/// そのため記録が1件でもある利用者は物理削除せず `Discharged` にして一覧から外す。
+/// 記録が無い利用者 (誤登録・テストデータ) は保存義務が無いので物理削除してよい。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResidentStatus {
+    /// 在籍中
+    #[default]
+    Active,
+    /// 退所済み (記録は保存されたまま、利用者一覧の既定表示からは外れる)
+    Discharged,
+}
+
 /// 申し送りサマリの優先度 3 段階。診断ではなく確認を促すための整理。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -109,6 +125,12 @@ pub struct Resident {
     #[serde(default)]
     pub baseline: String,
     pub created_at: String,
+    /// 在籍状態。既存アイテムには属性が無いため default (= Active) で読む
+    #[serde(default)]
+    pub status: ResidentStatus,
+    /// 退所時刻 (RFC3339 UTC)。在籍中は None
+    #[serde(default)]
+    pub discharged_at: Option<String>,
 }
 
 /// 申し送りサマリの 1 項目。
@@ -185,5 +207,29 @@ mod tests {
         assert_eq!(rec.schema_version, SCHEMA_VERSION);
         assert_eq!(rec.approved_at, None);
         assert_eq!(rec.status, RecordStatus::Draft);
+    }
+
+    #[test]
+    fn resident_without_status_reads_as_active() {
+        // status / discharged_at を持たない既存アイテムを想定。
+        // バックフィルはしない規約のため、読み取り時に既定値で吸収できる必要がある。
+        let json = r#"{
+            "id": "r1",
+            "floor": "3",
+            "name": "山田 太郎",
+            "room": "301",
+            "created_at": "2026-07-19T00:00:00Z"
+        }"#;
+        let r: Resident = serde_json::from_str(json).unwrap();
+        assert_eq!(r.schema_version, SCHEMA_VERSION);
+        assert_eq!(r.status, ResidentStatus::Active);
+        assert_eq!(r.discharged_at, None);
+        assert_eq!(r.baseline, "");
+    }
+
+    #[test]
+    fn resident_status_serializes_snake_case() {
+        let json = serde_json::to_string(&ResidentStatus::Discharged).unwrap();
+        assert_eq!(json, "\"discharged\"");
     }
 }

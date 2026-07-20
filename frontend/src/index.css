@@ -1,18 +1,298 @@
 @import 'tailwindcss';
 
+/*
+ * デザイントークン (Apple HIG: Clarity / Deference / Depth)
+ *
+ * 原則: 色はすべてこのセマンティックトークン経由で参照する。
+ *       コンポーネント側で slate-* / sky-* 等のパレットを直書きしない。
+ *
+ * アクセント(侘助紅)と警告(danger)は色相が近いため、役割を厳密に分ける:
+ *   - accent … 操作要素のみ (ボタン / アクティブなナビ / リンク / フォーカスリング)
+ *   - danger … 状態・意味のみ (要注意バッジ / 破壊的操作 / エラー)
+ *   バッジにアクセント色を使わないこと。
+ */
+@theme {
+  /* --- アクセント: 侘助(椿)の臙脂 --- */
+  --color-accent: #a6415a;
+  --color-accent-hover: #8f3549;
+  --color-accent-active: #7a2c3d;
+  --color-accent-tint: #faf2f4;
+  --color-accent-muted: #e8cdd4;
+
+  /* --- 背景 (Deference: コンテンツを邪魔しない) --- */
+  --color-canvas: #fbfaf9;
+  --color-surface: #ffffff;
+  --color-sunken: #f5f3f1;
+
+  /* --- テキスト階層 --- */
+  --color-label: #1c1b1a;
+  --color-label-2: #6e6b68;
+  --color-label-3: #9a9691;
+
+  /* --- 罫線・塗り --- */
+  --color-separator: #e8e5e2;
+  --color-fill: rgb(28 27 26 / 0.04);
+  --color-fill-strong: rgb(28 27 26 / 0.07);
+
+  /* --- セマンティック (アクセントとは独立) --- */
+  --color-danger: #c7332a;
+  --color-danger-hover: #a92a22;
+  --color-danger-tint: #fdeceb;
+  --color-danger-muted: #f2c9c6;
+
+  --color-warn: #b7791f;
+  --color-warn-tint: #fdf6e7;
+  --color-warn-muted: #eddcb4;
+
+  --color-success: #3f7d58;
+
+  /* --- 角丸 --- */
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-sheet: 16px;
+
+  /* --- タイポグラフィ ---
+   * 階層はサイズではなくウェイトと色で作る (HIG)。
+   * 日本語主体のため行間は広め、見出しは字間を詰める。 */
+  --text-display: 26px;
+  --text-display--line-height: 1.35;
+  --text-display--letter-spacing: -0.02em;
+  --text-display--font-weight: 600;
+
+  --text-title: 20px;
+  --text-title--line-height: 1.4;
+  --text-title--letter-spacing: -0.015em;
+  --text-title--font-weight: 600;
+
+  --text-section: 15px;
+  --text-section--line-height: 1.5;
+  --text-section--letter-spacing: -0.01em;
+  --text-section--font-weight: 600;
+
+  --text-body: 15px;
+  --text-body--line-height: 1.75;
+
+  --text-sub: 13px;
+  --text-sub--line-height: 1.6;
+
+  --text-caption: 12px;
+  --text-caption--line-height: 1.5;
+
+  /* --- モーション: Apple のスプリング風イージング --- */
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic UI', 'Noto Sans JP', 'Segoe UI',
+    system-ui, sans-serif;
+}
+
 :root {
   color-scheme: light;
 }
 
 body {
   margin: 0;
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    'Noto Sans JP',
-    sans-serif;
-  background-color: #f8fafc;
-  color: #0f172a;
+  font-family: var(--font-sans);
+  /* palt: 日本語の約物を詰めて字面を締める */
+  font-feature-settings: 'palt' 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--color-canvas);
+  color: var(--color-label);
+  font-size: var(--text-body);
+  line-height: 1.75;
+}
+
+/* ルビ(AI=ラブ)は控えめに。字面を押し上げないよう小さく淡く */
+ruby > rt {
+  font-size: 0.42em;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+}
+
+/* 根拠ドリルダウン等の <details> マーカーを自前表現に置き換える */
+summary::-webkit-details-marker {
+  display: none;
+}
+summary {
+  list-style: none;
+}
+
+/*
+ * マテリアル層
+ *
+ * 単色ベタ塗りは安く見える。Apple の質感は次の4つの重ね合わせで出来ている:
+ *   1. ごく浅い縦グラデーション (上が明るい = 上から光が当たっている)
+ *   2. 上辺の内側ハイライト (inset 0 1px 0 白) = 面のエッジの反射
+ *   3. 色を持った落ち影 (黒ではなく、その面の色を暗くした影)
+ *   4. hairline のリング (0 0 0 .5px) = 輪郭の締まり
+ * 複数プロパティの協調が要るのでユーティリティではなく CSS で書く。
+ */
+@layer components {
+  /* --- ボタン: 主要アクション --- */
+  .mat-primary {
+    background-image: linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--color-accent), white 14%) 0%,
+      var(--color-accent) 52%,
+      color-mix(in oklab, var(--color-accent), black 6%) 100%
+    );
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.26),
+      inset 0 0 0 0.5px rgb(122 44 61 / 0.55),
+      0 1px 2px rgb(122 44 61 / 0.24),
+      0 2px 6px rgb(122 44 61 / 0.14);
+  }
+  /* hover は filter で明るくする。background-image はCSS補間できず、
+     差し替えると影のトランジションと動きがズレるため。 */
+  .mat-primary:hover:not(:disabled) {
+    filter: brightness(1.07);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.32),
+      inset 0 0 0 0.5px rgb(122 44 61 / 0.5),
+      0 1px 2px rgb(122 44 61 / 0.22),
+      0 4px 12px rgb(122 44 61 / 0.2);
+  }
+  /* 押下: 光源が消えて沈む */
+  .mat-primary:active:not(:disabled) {
+    filter: brightness(0.92);
+    box-shadow:
+      inset 0 1px 3px rgb(80 26 38 / 0.4),
+      inset 0 0 0 0.5px rgb(122 44 61 / 0.6);
+  }
+  .mat-primary:disabled {
+    background-image: none;
+    box-shadow: none;
+  }
+
+  /* --- ボタン: 破壊的アクション。primary と同じ作りで色相だけ差し替える --- */
+  .mat-danger {
+    background-image: linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--color-danger), white 14%) 0%,
+      var(--color-danger) 52%,
+      color-mix(in oklab, var(--color-danger), black 6%) 100%
+    );
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.26),
+      inset 0 0 0 0.5px rgb(120 30 24 / 0.55),
+      0 1px 2px rgb(120 30 24 / 0.24),
+      0 2px 6px rgb(120 30 24 / 0.14);
+  }
+  .mat-danger:hover:not(:disabled) {
+    filter: brightness(1.07);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.32),
+      inset 0 0 0 0.5px rgb(120 30 24 / 0.5),
+      0 1px 2px rgb(120 30 24 / 0.22),
+      0 4px 12px rgb(120 30 24 / 0.2);
+  }
+  .mat-danger:active:not(:disabled) {
+    filter: brightness(0.92);
+    box-shadow:
+      inset 0 1px 3px rgb(90 20 16 / 0.4),
+      inset 0 0 0 0.5px rgb(120 30 24 / 0.6);
+  }
+  .mat-danger:disabled {
+    background-image: none;
+    box-shadow: none;
+  }
+
+  /* --- ボタン: 副次。白いガラス板 --- */
+  .mat-secondary {
+    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.9) 0%, rgb(250 249 248 / 0.8) 100%);
+    backdrop-filter: saturate(180%) blur(12px);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.9),
+      inset 0 0 0 0.5px rgb(28 27 26 / 0.12),
+      0 1px 2px rgb(28 27 26 / 0.06);
+  }
+  .mat-secondary:hover:not(:disabled) {
+    filter: brightness(1.02);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 1),
+      inset 0 0 0 0.5px rgb(28 27 26 / 0.16),
+      0 2px 6px rgb(28 27 26 / 0.08);
+  }
+  .mat-secondary:active:not(:disabled) {
+    filter: brightness(0.96);
+    box-shadow:
+      inset 0 1px 2px rgb(28 27 26 / 0.1),
+      inset 0 0 0 0.5px rgb(28 27 26 / 0.14);
+  }
+
+  /* --- カード面。ほぼ白だが、わずかな縦グラデと上辺ハイライトで「板」に見せる --- */
+  .mat-surface {
+    background-image: linear-gradient(180deg, #ffffff 0%, #fdfcfc 100%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.8),
+      0 1px 1px rgb(28 27 26 / 0.03);
+  }
+
+  /* --- 浮くカード (ログイン等)。落ち影を大きく柔らかく --- */
+  .mat-raised {
+    background-image: linear-gradient(180deg, #ffffff 0%, #fdfcfc 100%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.9),
+      0 1px 2px rgb(28 27 26 / 0.05),
+      0 8px 24px rgb(28 27 26 / 0.07),
+      0 24px 48px rgb(28 27 26 / 0.05);
+  }
+
+  /* --- 入力欄。ごくわずかに凹ませる (押せる面ではなく受ける面) --- */
+  .mat-field {
+    box-shadow:
+      inset 0 1px 2px rgb(28 27 26 / 0.04),
+      inset 0 0 0 0.5px rgb(28 27 26 / 0.04);
+  }
+  .mat-field:focus-visible {
+    box-shadow:
+      inset 0 1px 2px rgb(28 27 26 / 0.02),
+      0 0 0 3px color-mix(in oklab, var(--color-accent) 22%, transparent);
+  }
+
+  /* --- Segmented のつまみ。物理的な「つまみ」に見せる --- */
+  .mat-thumb {
+    background-image: linear-gradient(180deg, #ffffff 0%, #fbfaf9 100%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 1),
+      inset 0 0 0 0.5px rgb(28 27 26 / 0.08),
+      0 1px 2px rgb(28 27 26 / 0.12),
+      0 2px 4px rgb(28 27 26 / 0.06);
+  }
+
+  /*
+   * 周辺光のある背景。フラットな単色は平面的に見えるため、
+   * アクセント色をごく薄く回り込ませて奥行きを出す。
+   */
+  .mat-ambient {
+    background-color: var(--color-canvas);
+    background-image:
+      radial-gradient(60rem 34rem at 50% -12%, rgb(166 65 90 / 0.09) 0%, transparent 62%),
+      radial-gradient(44rem 28rem at 88% 108%, rgb(166 65 90 / 0.06) 0%, transparent 58%),
+      radial-gradient(38rem 26rem at 8% 88%, rgb(110 107 104 / 0.05) 0%, transparent 60%);
+  }
+}
+
+/* ConfirmDialog の登場。下からごくわずかに立ち上げる */
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
