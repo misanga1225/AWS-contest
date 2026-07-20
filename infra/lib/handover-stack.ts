@@ -249,6 +249,10 @@ export class HandoverStack extends cdk.Stack {
           userPoolId: userPool.userPoolId,
           userPoolClientId: userPoolClient.userPoolClientId,
           floors: settings.floors,
+          // シフト帯 (UTC)。フロントは職員のローカル時刻へ変換して
+          // 「いま日勤か夜勤か」を表示する。夜勤の開始 = 日勤の終了。
+          shiftDayStart: settings.shiftDayStart,
+          shiftNightStart: settings.shiftDayEnd,
         }),
       ],
     });
