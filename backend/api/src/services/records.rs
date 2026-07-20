@@ -6,15 +6,15 @@ use domain::{CareRecord, Category, RecordStatus};
 
 use crate::config::AppConfig;
 use crate::error::ApiError;
-use crate::llm::{Llm, ResidentBrief, StructureRequest};
+use crate::llm::{Llm, StructureRequest};
 use crate::repository::{RepoError, Repository};
 use crate::util::{new_id, now_rfc3339};
 
 /// 下書き作成の入力。
 pub struct CreateDraft {
     pub floor: String,
-    /// 職員が先に選んだ利用者 (任意)。無ければ LLM の推定を使う
-    pub resident_id: Option<String>,
+    /// 対象利用者。職員が画面で必ず選ぶ (LLM に推定させない)
+    pub resident_id: String,
     pub text: String,
     /// 認証済み作成者 (Cognito sub)
     pub created_by: String,
@@ -51,35 +51,32 @@ pub async fn create_draft(
     if input.text.trim().is_empty() {
         return Err(ApiError::BadRequest("本文が空です".to_string()));
     }
-    let residents = repo.list_residents(&input.floor).await?;
-    let briefs: Vec<ResidentBrief> = residents
-        .iter()
-        .map(|r| ResidentBrief {
-            id: r.id.clone(),
-            name: r.name.clone(),
-            room: r.room.clone(),
-        })
-        .collect();
+    // 利用者は職員が必ず選ぶ。LLM 呼び出しの前に検証し、
+    // 課金してから承認時に弾かれる (= 無駄なトークン消費) のを避ける。
+    if input.resident_id.trim().is_empty() {
+        return Err(ApiError::BadRequest("利用者が未選択です".to_string()));
+    }
+    if repo
+        .get_resident(&input.floor, &input.resident_id)
+        .await?
+        .is_none()
+    {
+        return Err(ApiError::BadRequest(
+            "指定の利用者が存在しません".to_string(),
+        ));
+    }
 
     let structured = llm
         .structure(StructureRequest {
             text: input.text.clone(),
-            residents: briefs,
         })
         .await?;
-
-    // 職員の明示選択を優先し、無ければ LLM 推定、それも無ければ空 (承認時に補う)
-    let resident_id = input
-        .resident_id
-        .filter(|s| !s.is_empty())
-        .or(structured.resident_id)
-        .unwrap_or_default();
 
     let record = CareRecord {
         schema_version: domain::SCHEMA_VERSION,
         id: new_id(),
         floor: input.floor,
-        resident_id,
+        resident_id: input.resident_id,
         category: structured.category,
         body_ja: structured.body_ja,
         original_text: input.text,

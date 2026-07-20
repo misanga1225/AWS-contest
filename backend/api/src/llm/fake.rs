@@ -50,13 +50,7 @@ fn detect_category(text: &str) -> Category {
 #[async_trait]
 impl Llm for FakeLlm {
     async fn structure(&self, req: StructureRequest) -> Result<StructuredCareMemo, LlmError> {
-        let resident_id = req
-            .residents
-            .iter()
-            .find(|r| req.text.contains(&r.name))
-            .map(|r| r.id.clone());
         Ok(StructuredCareMemo {
-            resident_id,
             category: detect_category(&req.text),
             body_ja: req.text.clone(),
             lang: detect_lang(&req.text),

@@ -7,7 +7,9 @@ import { initReactI18next } from 'react-i18next';
 const resources = {
   ja: {
     translation: {
-      appName: '申し送り支援',
+      appName: 'AIヘルパー わびすけ',
+      // 「AI」を「ラブ」と読ませるルビ。ja のみ使用 (AppName コンポーネント)
+      appNameRuby: 'ラブ',
       nav: { residents: '利用者', records: 'ケア記録', summaries: '申し送り' },
       auth: {
         signIn: 'ログイン',
@@ -34,14 +36,27 @@ const resources = {
         seedDemo: 'デモデータ初期化',
         add: '利用者を追加',
         empty: '利用者がいません。デモデータ初期化を押してください。',
-        confirmDelete: 'この利用者を削除しますか？',
+        discharge: '退所',
+        confirmDelete: 'この利用者を一覧から外しますか？',
+        confirmDeleteBody:
+          'ケア記録がある場合は「退所」として扱い、記録は法定の保存期間のため残します。記録が無い場合のみ完全に削除されます。',
+        showDischarged: '退所者を表示',
+        dischargedBadge: '退所',
+        dischargedAt: '退所日時',
+        resultDischarged: '退所として処理しました。ケア記録は保存されています。',
+        resultDeleted: '利用者を削除しました。',
       },
       records: {
         title: 'ケア記録',
         compose: 'ケアメモを投稿',
         placeholder: '母語で入力できます。例: 昼食を全量摂取。水分もよく摂れている。',
         resident: '利用者',
-        autoDetect: '自動判定',
+        memo: 'ケアメモ',
+        selectResident: '選択してください',
+        selectResidentHint: '利用者を選んでください',
+        enterMemoHint: 'ケアメモを入力してください',
+        noResidents: 'このフロアに利用者が登録されていません。先に利用者を登録してください。',
+        goToResidents: '利用者マスタへ',
         structure: '構造化する',
         structuring: '構造化中…',
         draftTitle: '下書きを確認・修正',
@@ -83,7 +98,7 @@ const resources = {
   },
   en: {
     translation: {
-      appName: 'Handover Assist',
+      appName: 'AI Helper Wabisuke',
       nav: { residents: 'Residents', records: 'Care Records', summaries: 'Handover' },
       auth: {
         signIn: 'Sign in',
@@ -110,14 +125,27 @@ const resources = {
         seedDemo: 'Load demo data',
         add: 'Add resident',
         empty: 'No residents. Press "Load demo data".',
-        confirmDelete: 'Delete this resident?',
+        discharge: 'Discharge',
+        confirmDelete: 'Remove this resident from the list?',
+        confirmDeleteBody:
+          'If the resident has care records, they are marked as discharged and the records are kept for the legally required retention period. Only residents without records are deleted permanently.',
+        showDischarged: 'Show discharged',
+        dischargedBadge: 'Discharged',
+        dischargedAt: 'Discharged at',
+        resultDischarged: 'Marked as discharged. Care records have been kept.',
+        resultDeleted: 'Resident deleted.',
       },
       records: {
         title: 'Care Records',
         compose: 'Post a care memo',
         placeholder: 'You can write in your language. e.g. Ate full lunch, well hydrated.',
         resident: 'Resident',
-        autoDetect: 'Auto-detect',
+        memo: 'Care memo',
+        selectResident: 'Please select',
+        selectResidentHint: 'Select a resident',
+        enterMemoHint: 'Enter a care memo',
+        noResidents: 'No residents on this floor yet. Please register a resident first.',
+        goToResidents: 'Go to residents',
         structure: 'Structure',
         structuring: 'Structuring…',
         draftTitle: 'Review & edit the draft',
@@ -159,7 +187,7 @@ const resources = {
   },
   vi: {
     translation: {
-      appName: 'Hỗ trợ bàn giao',
+      appName: 'Trợ lý AI Wabisuke',
       nav: { residents: 'Người cao tuổi', records: 'Ghi chép', summaries: 'Bàn giao' },
       auth: {
         signIn: 'Đăng nhập',
@@ -186,14 +214,27 @@ const resources = {
         seedDemo: 'Tạo dữ liệu mẫu',
         add: 'Thêm người',
         empty: 'Chưa có ai. Hãy nhấn "Tạo dữ liệu mẫu".',
-        confirmDelete: 'Xoá người này?',
+        discharge: 'Xuất viện',
+        confirmDelete: 'Gỡ người này khỏi danh sách?',
+        confirmDeleteBody:
+          'Nếu có ghi chép chăm sóc, người này sẽ được đánh dấu là đã xuất viện và ghi chép được giữ lại theo thời hạn lưu trữ bắt buộc. Chỉ người không có ghi chép mới bị xoá hoàn toàn.',
+        showDischarged: 'Hiện người đã xuất viện',
+        dischargedBadge: 'Đã xuất viện',
+        dischargedAt: 'Thời điểm xuất viện',
+        resultDischarged: 'Đã đánh dấu xuất viện. Ghi chép vẫn được giữ lại.',
+        resultDeleted: 'Đã xoá người này.',
       },
       records: {
         title: 'Ghi chép chăm sóc',
         compose: 'Đăng ghi chú',
         placeholder: 'Bạn có thể viết bằng tiếng mẹ đẻ. VD: Ăn hết bữa trưa, uống đủ nước.',
         resident: 'Người cao tuổi',
-        autoDetect: 'Tự động',
+        memo: 'Ghi chú chăm sóc',
+        selectResident: 'Vui lòng chọn',
+        selectResidentHint: 'Hãy chọn người cao tuổi',
+        enterMemoHint: 'Hãy nhập ghi chú chăm sóc',
+        noResidents: 'Tầng này chưa có người nào. Vui lòng đăng ký trước.',
+        goToResidents: 'Đến danh sách người cao tuổi',
         structure: 'Cấu trúc hoá',
         structuring: 'Đang xử lý…',
         draftTitle: 'Kiểm tra & sửa bản nháp',

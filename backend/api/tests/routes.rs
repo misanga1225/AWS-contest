@@ -14,13 +14,14 @@ use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
 use domain::shift::ShiftConfig;
-use domain::{CareRecord, HandoverSummary, RecordStatus, Resident};
+use domain::{CareRecord, HandoverSummary, RecordStatus, Resident, ResidentStatus};
 use serde_json::{Value, json};
 use tower::ServiceExt;
 
 fn test_state() -> Arc<AppState> {
     let config = AppConfig {
         table_name: "test-table".to_string(),
+        index_name: "GSI1".to_string(),
         bedrock_model_id: "fake-model".to_string(),
         shift: ShiftConfig::from_hhmm("00:00", "23:59").unwrap(), // 日勤に収める
         floors: vec!["1".to_string(), "2".to_string(), "3".to_string()],
@@ -218,19 +219,31 @@ async fn full_flow_demo_post_approve_summarize() {
 #[tokio::test]
 async fn approve_rejects_unknown_resident() {
     let app = app();
-    // draft を作成 (resident_id 明示なし → FakeLlm 推定も無いので空)
+
+    // 有効な利用者で draft を作る
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/residents",
+            Some(json!({ "floor": "2", "name": "承認 テスト", "room": "201" })),
+        ))
+        .await
+        .unwrap();
+    let resident: Resident = body_json(resp).await;
+
     let resp = app
         .clone()
         .oneshot(authed(
             "POST",
             "/records",
-            Some(json!({ "floor": "2", "text": "特記なし" })),
+            Some(json!({ "floor": "2", "resident_id": resident.id, "text": "特記なし" })),
         ))
         .await
         .unwrap();
     let draft: CareRecord = body_json(resp).await;
 
-    // 実在しない利用者で承認 → 400
+    // 承認時に実在しない利用者へ差し替え → 400
     let resp = app
         .clone()
         .oneshot(authed(
@@ -247,6 +260,256 @@ async fn approve_rejects_unknown_resident() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+/// 利用者未選択の投稿は LLM を呼ぶ前に 400 で弾く。
+/// (誰の記録かを LLM に推定させないため。無駄なトークン消費も避ける)
+#[tokio::test]
+async fn create_record_requires_resident() {
+    let app = app();
+
+    // resident_id が空文字 → 400
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/records",
+            Some(json!({ "floor": "1", "resident_id": "", "text": "昼食を全量摂取" })),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    // resident_id 自体が無い → 400 (デシリアライズで弾かれる)
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/records",
+            Some(json!({ "floor": "1", "text": "昼食を全量摂取" })),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    // 記録は 1 件も作られていない
+    let resp = app
+        .clone()
+        .oneshot(authed("GET", "/records?floor=1", None))
+        .await
+        .unwrap();
+    let records: Vec<CareRecord> = body_json(resp).await;
+    assert!(records.is_empty(), "検証失敗時に draft を作ってはいけない");
+}
+
+/// 実在しない利用者を指定した投稿も 400。
+#[tokio::test]
+async fn create_record_rejects_unknown_resident() {
+    let resp = app()
+        .oneshot(authed(
+            "POST",
+            "/records",
+            Some(json!({
+                "floor": "1",
+                "resident_id": "does-not-exist",
+                "text": "昼食を全量摂取"
+            })),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+/// 記録が無い利用者 (誤登録・テストデータ) は物理削除される。
+#[tokio::test]
+async fn delete_without_records_removes_resident() {
+    let app = app();
+
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/residents",
+            Some(json!({ "floor": "1", "name": "誤登録 太郎", "room": "101" })),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
+    let resident: Resident = body_json(resp).await;
+    assert_eq!(resident.status, ResidentStatus::Active);
+
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "DELETE",
+            &format!("/residents/{}?floor=1", resident.id),
+            None,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body: Value = body_json(resp).await;
+    assert_eq!(body["outcome"], "deleted");
+
+    // 退所者を含めても出てこない = 物理削除されている
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "GET",
+            "/residents?floor=1&include_discharged=true",
+            None,
+        ))
+        .await
+        .unwrap();
+    let listed: Vec<Resident> = body_json(resp).await;
+    assert!(listed.is_empty(), "記録が無い利用者は物理削除される");
+}
+
+/// 記録がある利用者は物理削除されず退所扱いになり、記録は保存されたまま残る。
+/// (法定保存義務のある記録が「誰の記録か分からない」孤児状態になるのを防ぐ)
+#[tokio::test]
+async fn delete_with_records_discharges_and_keeps_records() {
+    let app = app();
+
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/residents",
+            Some(json!({ "floor": "1", "name": "在籍 花子", "room": "102" })),
+        ))
+        .await
+        .unwrap();
+    let resident: Resident = body_json(resp).await;
+
+    // 記録を1件作る (draft のままでも記録は存在する)
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/records",
+            Some(json!({
+                "floor": "1",
+                "resident_id": resident.id,
+                "text": "昼食を全量摂取"
+            })),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let record: CareRecord = body_json(resp).await;
+
+    // 削除要求 → 退所扱い
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "DELETE",
+            &format!("/residents/{}?floor=1", resident.id),
+            None,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body: Value = body_json(resp).await;
+    assert_eq!(body["outcome"], "discharged");
+
+    // 既定の一覧からは外れる
+    let resp = app
+        .clone()
+        .oneshot(authed("GET", "/residents?floor=1", None))
+        .await
+        .unwrap();
+    let active: Vec<Resident> = body_json(resp).await;
+    assert!(active.is_empty(), "退所者は既定の一覧に出ない");
+
+    // include_discharged=true では取得でき、記録の参照先を解決できる
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "GET",
+            "/residents?floor=1&include_discharged=true",
+            None,
+        ))
+        .await
+        .unwrap();
+    let all: Vec<Resident> = body_json(resp).await;
+    assert_eq!(all.len(), 1);
+    assert_eq!(all[0].id, resident.id);
+    assert_eq!(all[0].status, ResidentStatus::Discharged);
+    assert!(all[0].discharged_at.is_some());
+
+    // 記録は消えていない
+    let resp = app
+        .clone()
+        .oneshot(authed("GET", "/records?floor=1", None))
+        .await
+        .unwrap();
+    let records: Vec<CareRecord> = body_json(resp).await;
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].id, record.id);
+    assert_eq!(records[0].resident_id, resident.id);
+}
+
+/// 退所した利用者を更新しても在籍状態は戻らない (更新 API で状態を変えられない)。
+#[tokio::test]
+async fn update_does_not_resurrect_discharged_resident() {
+    let app = app();
+
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/residents",
+            Some(json!({ "floor": "1", "name": "退所 次郎", "room": "103" })),
+        ))
+        .await
+        .unwrap();
+    let resident: Resident = body_json(resp).await;
+
+    app.clone()
+        .oneshot(authed(
+            "POST",
+            "/records",
+            Some(json!({ "floor": "1", "resident_id": resident.id, "text": "特記なし" })),
+        ))
+        .await
+        .unwrap();
+    app.clone()
+        .oneshot(authed(
+            "DELETE",
+            &format!("/residents/{}?floor=1", resident.id),
+            None,
+        ))
+        .await
+        .unwrap();
+
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "PUT",
+            &format!("/residents/{}", resident.id),
+            Some(json!({ "floor": "1", "name": "退所 次郎", "room": "104" })),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let updated: Resident = body_json(resp).await;
+    assert_eq!(updated.room, "104", "居室は更新される");
+    assert_eq!(
+        updated.status,
+        ResidentStatus::Discharged,
+        "更新 API では在籍状態を戻せない"
+    );
+}
+
+/// 存在しない利用者の削除は 404。
+#[tokio::test]
+async fn delete_unknown_resident_is_not_found() {
+    let resp = app()
+        .oneshot(authed("DELETE", "/residents/does-not-exist?floor=1", None))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
 
 fn today() -> String {

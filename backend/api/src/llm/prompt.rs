@@ -42,19 +42,18 @@ pub fn summarize_system() -> String {
 }
 
 /// 構造化のユーザープロンプトを組み立てる。
+///
+/// 対象利用者は職員が選ぶため、利用者候補は渡さない (氏名を LLM に送らない)。
 pub fn structure_user_prompt(req: &StructureRequest) -> String {
-    let residents_json = serde_json::to_string(&req.residents).unwrap_or_else(|_| "[]".to_string());
     format!(
-        "# 利用者候補(この中から resident_id を選ぶ。該当なしは null)\n{residents}\n\n\
-# 入力ケアメモ(母語の可能性あり)\n{text}\n\n\
+        "# 入力ケアメモ(母語の可能性あり)\n{text}\n\n\
 # 出力(JSONのみ)\n\
 以下の形式で返す:\n\
-{{\"resident_id\": string|null, \"category\": \"meal|hydration|toileting|vitals|incident|note\", \
+{{\"category\": \"meal|hydration|toileting|vitals|incident|note\", \
 \"body_ja\": string, \"lang\": string}}\n\
 - category は内容に最も合うものを1つ選ぶ。\n\
 - body_ja は日本語の介護記録として簡潔に整形する。\n\
 - lang は原文の言語コード(ja/en/vi など)。",
-        residents = residents_json,
         text = req.text,
     )
 }
