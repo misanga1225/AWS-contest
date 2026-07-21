@@ -57,9 +57,9 @@
 - **Bedrockに利用者の氏名を送らない** — 構造化プロンプトには原文のみを渡し，利用者名・居室番号を一切含めない．個人情報を外部推論サービスへ送る量を最小化すると同時に，プロンプトからフロア全員分の氏名リストが消えるためトークン消費も削減される
 - **個人情報は1箇所に集約** — 氏名は利用者アイテムのみが保持し，ケア記録側へ非正規化コピーしない．保存期間経過後の消去や個人情報保護法の利用停止・消去請求に，全記録の書き換えなしで対応できる．ログにも氏名を出力しない
 
-## 動かし方
+## 動作
 
-**AWS上にデプロイして動作確認する構成**．カスタムドメインは使用せず，デプロイ後に発行される CloudFront のデフォルトドメインでアクセス
+**AWS上にデプロイして動作確認**．CloudFront のデフォルトドメインでアクセス
 
 ### 前提条件
 
@@ -70,8 +70,6 @@
 | Rust | stable (rustup) |
 | cargo-lambda | `pip install cargo-lambda` / `brew install cargo-lambda` / `scoop install cargo-lambda` ([公式手順](https://www.cargo-lambda.info/guide/installation.html)) |
 | AWS CDK | `npm install -g aws-cdk` (またはnpx使用) |
-
-**Bedrockモデルアクセスの有効化**: デプロイ先リージョン(既定: `ap-northeast-1`)のBedrockコンソール →「モデルアクセス」で **Anthropic Claude** を有効化
 
 ### 1. デプロイ
 
@@ -111,21 +109,4 @@ aws cognito-idp admin-set-user-password \
   --username demo-staff \
   --password '<任意のパスワード>' \
   --permanent
-```
-
-### 3. 動作確認フロー
-
-1. `CloudFrontUrl` をブラウザで開き，作成したユーザでログイン
-2. 利用者マスタ画面で**「デモデータ初期化」**ボタンを押す(架空の利用者・baselineが投入されます)
-3. ケアメモを投稿 → LLMが構造化した下書きを確認・修正して承認
-4. 言語を多言語に切り替えて母語で投稿 → 日本語記録として構造化されることを確認
-5. サマリ画面で手動生成を実行(実運用ではシフト終了時刻に自動生成)
-6. 3段階優先度のサマリから根拠記録へドリルダウン
-7. サマリ生成後に別の記録を承認 → 「追記」枠に表示されることを確認
-
-### 4. 後片付け
-
-```bash
-cd infra
-npx cdk destroy
 ```
