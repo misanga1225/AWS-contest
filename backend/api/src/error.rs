@@ -47,9 +47,11 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let status = self.status();
         // サーバ内部エラーの詳細はクライアントに返さずログにのみ残す
-        // (利用者の個人情報は含めない)。
+        // (利用者の個人情報は含めない)。認証失敗も検知できるよう記録する。
         if status == StatusCode::INTERNAL_SERVER_ERROR {
             tracing::error!(error = %self, "internal error");
+        } else if status == StatusCode::UNAUTHORIZED {
+            tracing::warn!("authentication failed");
         }
         let body = Json(json!({
             "error": self.to_string(),

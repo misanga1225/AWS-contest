@@ -107,9 +107,12 @@ pub async fn delete(
             ..existing
         };
         repo.put_resident(&discharged).await?;
+        // 監査ログ: 退所処理は法定保存義務のある記録に関わるため記録する (氏名は含めない)。
+        tracing::info!(resident_id = %id, floor = %floor, "resident discharged");
         Ok(DeleteOutcome::Discharged)
     } else {
         repo.delete_resident(floor, id).await?;
+        tracing::info!(resident_id = %id, floor = %floor, "resident deleted (no records)");
         Ok(DeleteOutcome::Deleted)
     }
 }

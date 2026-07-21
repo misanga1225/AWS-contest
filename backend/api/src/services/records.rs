@@ -10,6 +10,9 @@ use crate::llm::{Llm, StructureRequest};
 use crate::repository::{RepoError, Repository};
 use crate::util::{new_id, now_rfc3339};
 
+/// ケアメモ本文の最大文字数。Bedrock への入力肥大化・呼び出しコスト濫用を防ぐ上限。
+const MAX_TEXT_CHARS: usize = 4000;
+
 /// 下書き作成の入力。
 pub struct CreateDraft {
     pub floor: String,
@@ -50,6 +53,11 @@ pub async fn create_draft(
 ) -> Result<CareRecord, ApiError> {
     if input.text.trim().is_empty() {
         return Err(ApiError::BadRequest("本文が空です".to_string()));
+    }
+    if input.text.chars().count() > MAX_TEXT_CHARS {
+        return Err(ApiError::BadRequest(format!(
+            "本文が長すぎます(最大{MAX_TEXT_CHARS}文字)"
+        )));
     }
     // 利用者は職員が必ず選ぶ。LLM 呼び出しの前に検証し、
     // 課金してから承認時に弾かれる (= 無駄なトークン消費) のを避ける。
@@ -124,7 +132,16 @@ pub async fn approve(repo: &dyn Repository, input: ApproveInput) -> Result<CareR
 
     // 条件付き書き込みで二重承認を原子的に防ぐ (get→put の間の競合対策)。
     match repo.put_record_if_unapproved(&record).await {
-        Ok(()) => Ok(record),
+        Ok(()) => {
+            // 監査ログ: 誰が・どのフロアの・どの記録を承認したか (氏名等のPIIは含めない)。
+            tracing::info!(
+                record_id = %record.id,
+                floor = %record.floor,
+                approved_by = %record.approved_by.as_deref().unwrap_or(""),
+                "record approved"
+            );
+            Ok(record)
+        }
         Err(RepoError::Conflict) => Err(ApiError::AlreadyApproved),
         Err(e) => Err(ApiError::Repo(e)),
     }
