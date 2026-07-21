@@ -4,3 +4,4 @@ pub mod demo;
 pub mod records;
 pub mod residents;
 pub mod summaries;
+pub mod transcribe;

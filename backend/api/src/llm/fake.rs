@@ -50,10 +50,20 @@ fn detect_category(text: &str) -> Category {
 #[async_trait]
 impl Llm for FakeLlm {
     async fn structure(&self, req: StructureRequest) -> Result<StructuredCareMemo, LlmError> {
+        let lang = detect_lang(&req.text);
+        // lang≠ja のとき、body_ja を原文言語へ逆翻訳した体の確認用テキストを返す。
+        // 実 LLM は本当に逆翻訳するが、フェイクは決定的な目印付き文字列で十分
+        // (create_draft が verification_text を保存する経路を検証できればよい)。
+        let verification_text = if lang == "ja" {
+            String::new()
+        } else {
+            format!("[{lang}逆翻訳] {}", req.text)
+        };
         Ok(StructuredCareMemo {
             category: detect_category(&req.text),
             body_ja: req.text.clone(),
-            lang: detect_lang(&req.text),
+            lang,
+            verification_text,
         })
     }
 

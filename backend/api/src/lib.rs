@@ -9,6 +9,7 @@ pub mod aws;
 pub mod config;
 pub mod error;
 pub mod llm;
+pub mod media;
 pub mod repository;
 pub mod routes;
 pub mod services;

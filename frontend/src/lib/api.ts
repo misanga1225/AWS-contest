@@ -2,13 +2,19 @@
 
 import { fetchAuthSession } from 'aws-amplify/auth';
 import type {
+  AudioUploadUrl,
   CareRecord,
   Category,
   DeleteResidentResponse,
   HandoverSummary,
   Resident,
   Shift,
+  TranscriptionJob,
+  TranscriptionStatus,
 } from '../types';
+
+/** 話す言語 (Transcribe 対応の UI 言語)。 */
+export type SpeakLang = 'ja' | 'en' | 'vi';
 
 /** API エラー (HTTP ステータスとメッセージを保持)。 */
 export class ApiError extends Error {
@@ -130,6 +136,35 @@ export class ApiClient {
     if (params.date) q.set('date', params.date);
     if (params.status) q.set('status', params.status);
     return this.request('GET', `/records?${q.toString()}`);
+  }
+
+  // --- 音声入力 (Transcribe) ---
+  /** 音声アップロード用のプリサインド PUT URL を発行する。 */
+  createAudioUploadUrl(contentType: string, ext: string): Promise<AudioUploadUrl> {
+    return this.request('POST', '/uploads/audio-url', { content_type: contentType, ext });
+  }
+  /**
+   * プリサインド URL へ音声 Blob を直接 PUT する (S3 直・Authorization ヘッダなし)。
+   * ApiClient.request を通さないのは、S3 の署名付き URL に別の Authorization を
+   * 載せると署名不一致で拒否されるため。
+   */
+  async uploadAudio(url: string, blob: Blob, contentType: string): Promise<void> {
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: { 'content-type': contentType },
+      body: blob,
+    });
+    if (!res.ok) {
+      throw new ApiError(res.status, `音声アップロードに失敗しました (${res.status})`);
+    }
+  }
+  /** 文字起こしジョブを開始する。 */
+  startTranscription(key: string, lang: SpeakLang): Promise<TranscriptionJob> {
+    return this.request('POST', '/transcribe', { key, lang });
+  }
+  /** 文字起こしの状態を取得する (ポーリング用)。 */
+  getTranscription(jobName: string): Promise<TranscriptionStatus> {
+    return this.request('GET', `/transcribe/${encodeURIComponent(jobName)}`);
   }
 
   // --- サマリ ---

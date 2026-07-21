@@ -102,6 +102,7 @@ fn sample_record(floor: &str, id: &str, created_at: &str, status: RecordStatus) 
         body_ja: "血圧 130/80".to_string(),
         original_text: "血圧 130/80".to_string(),
         lang: "ja".to_string(),
+        verification_text: None,
         status,
         created_by: "staff-1".to_string(),
         created_at: created_at.to_string(),

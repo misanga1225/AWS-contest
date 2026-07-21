@@ -7,6 +7,7 @@ use axum::response::{IntoResponse, Response};
 use serde_json::json;
 
 use crate::llm::LlmError;
+use crate::media::{StorageError, TranscribeError};
 use crate::repository::RepoError;
 
 /// API ハンドラの共通エラー。
@@ -29,6 +30,12 @@ pub enum ApiError {
 
     #[error("LLM 処理エラー")]
     Llm(#[from] LlmError),
+
+    #[error("ストレージエラー")]
+    Storage(#[from] StorageError),
+
+    #[error("文字起こしエラー")]
+    Transcribe(#[from] TranscribeError),
 }
 
 impl ApiError {
@@ -38,7 +45,10 @@ impl ApiError {
             ApiError::BadRequest(_) => StatusCode::BAD_REQUEST,
             ApiError::NotFound => StatusCode::NOT_FOUND,
             ApiError::AlreadyApproved => StatusCode::CONFLICT,
-            ApiError::Repo(_) | ApiError::Llm(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            ApiError::Repo(_)
+            | ApiError::Llm(_)
+            | ApiError::Storage(_)
+            | ApiError::Transcribe(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

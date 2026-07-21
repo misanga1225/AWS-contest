@@ -48,6 +48,14 @@ pub struct StructuredCareMemo {
     pub body_ja: String,
     /// 検出した原文の言語コード (例: "ja", "en", "vi")
     pub lang: String,
+    /// lang≠ja のとき、`body_ja` を原文言語へ逆翻訳した確認用テキスト。
+    ///
+    /// 職員が承認前に「日本語へ整形した内容」を母語で照合するための確認用。
+    /// 原文 (`StructureRequest::text`) の逆翻訳ではなく、必ず整形後の `body_ja` を
+    /// 逆翻訳したもの (整形時に意味が変わった/落ちた/創作された箇所を検出するため)。
+    /// lang==ja のとき・逆翻訳が不要なときは空文字列。
+    #[serde(default)]
+    pub verification_text: String,
 }
 
 /// 要約の入力。

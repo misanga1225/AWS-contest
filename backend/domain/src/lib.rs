@@ -12,7 +12,9 @@ pub mod keys;
 pub mod shift;
 
 /// 現在のスキーマバージョン。構造を破壊的に変えたらインクリメントする。
-pub const SCHEMA_VERSION: u32 = 1;
+///
+/// v2: `CareRecord.verification_text` (逆翻訳の確認用テキスト) を追加。
+pub const SCHEMA_VERSION: u32 = 2;
 
 fn default_schema_version() -> u32 {
     SCHEMA_VERSION
@@ -95,6 +97,12 @@ pub struct CareRecord {
     pub original_text: String,
     /// 原文の言語コード (BCP-47 相当。例: "ja", "en", "vi")
     pub lang: String,
+    /// lang≠ja のとき、`body_ja` を原文言語へ逆翻訳した確認用テキスト。
+    ///
+    /// 外国人職員が承認前に「日本語へ整形した内容」を母語で照合するために使う
+    /// (承認=human-in-the-loop の実効性を担保する)。ja のとき・逆翻訳が無いときは None。
+    #[serde(default)]
+    pub verification_text: Option<String>,
     pub status: RecordStatus,
     /// 作成者の Cognito サブジェクト (証跡)
     pub created_by: String,

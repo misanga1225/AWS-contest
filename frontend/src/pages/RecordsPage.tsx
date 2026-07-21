@@ -1,9 +1,11 @@
 // ケア記録画面: 母語入力→LLM構造化→下書き確認・修正→承認、承認済み一覧。
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { useApp } from '../lib/appContext';
+import { Mic, Square } from 'lucide-react';
+import { useApi, useApp } from '../lib/appContext';
+import type { ApiClient, SpeakLang } from '../lib/api';
 import { useApproveRecord, useCreateRecord, useRecords, useResidents } from '../lib/queries';
 import type { CareRecord, Category, Resident } from '../types';
 import { CATEGORIES } from '../types';
@@ -19,6 +21,126 @@ import {
   Spinner,
   Textarea,
 } from '../components/ui';
+
+/** UI 言語コードから、話す言語 (Transcribe 対応の ja/en/vi) を求める。 */
+function toSpeakLang(uiLang: string): SpeakLang {
+  const base = uiLang.split('-')[0];
+  return base === 'en' || base === 'vi' ? base : 'ja';
+}
+
+/** MediaRecorder が対応する音声形式から、送信用 content-type と拡張子を決める。 */
+function audioFormat(mime: string): { contentType: string; ext: string } {
+  const base = mime.split(';')[0].trim().toLowerCase();
+  switch (base) {
+    case 'audio/mp4':
+      return { contentType: 'audio/mp4', ext: 'mp4' };
+    case 'audio/ogg':
+      return { contentType: 'audio/ogg', ext: 'ogg' };
+    case 'audio/mpeg':
+      return { contentType: 'audio/mpeg', ext: 'mp3' };
+    default:
+      // webm/opus が最も広く使える既定
+      return { contentType: 'audio/webm', ext: 'webm' };
+  }
+}
+
+/** ブラウザが録音に対応している形式を1つ選ぶ (非対応なら undefined = 既定に委ねる)。 */
+function pickRecordingMime(): string | undefined {
+  if (typeof MediaRecorder === 'undefined') return undefined;
+  for (const m of ['audio/webm', 'audio/mp4', 'audio/ogg']) {
+    if (MediaRecorder.isTypeSupported(m)) return m;
+  }
+  return undefined;
+}
+
+/** 文字起こしジョブを完了までポーリングし、テキストを返す。 */
+async function pollTranscription(api: ApiClient, jobName: string): Promise<string> {
+  const INTERVAL_MS = 2000;
+  const MAX_ATTEMPTS = 45; // 最大 ~90 秒
+  for (let i = 0; i < MAX_ATTEMPTS; i++) {
+    const res = await api.getTranscription(jobName);
+    if (res.status === 'completed') return res.text ?? '';
+    if (res.status === 'failed') throw new Error('transcription failed');
+    await new Promise((resolve) => setTimeout(resolve, INTERVAL_MS));
+  }
+  throw new Error('transcription timed out');
+}
+
+type VoiceState = 'idle' | 'recording' | 'transcribing';
+
+/**
+ * マイク録音 → S3 直アップロード → バッチ Transcribe → テキスト取得までを担う。
+ * 完了したテキストは `onTranscript` に渡す (呼び出し側が Textarea へ反映)。
+ */
+function useVoiceCapture(onTranscript: (text: string) => void) {
+  const api = useApi();
+  const [state, setState] = useState<VoiceState>('idle');
+  // 'micDenied' | 'transcribeFailed' の i18n キー、または null
+  const [errorKey, setErrorKey] = useState<string | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  const stopStream = () => {
+    streamRef.current?.getTracks().forEach((tr) => tr.stop());
+    streamRef.current = null;
+  };
+
+  const finish = async (lang: SpeakLang) => {
+    setState('transcribing');
+    const recorder = recorderRef.current;
+    const mime = recorder?.mimeType || 'audio/webm';
+    stopStream();
+    const { contentType, ext } = audioFormat(mime);
+    const blob = new Blob(chunksRef.current, { type: contentType });
+    try {
+      const { url, key } = await api.createAudioUploadUrl(contentType, ext);
+      await api.uploadAudio(url, blob, contentType);
+      const { job_name } = await api.startTranscription(key, lang);
+      const text = await pollTranscription(api, job_name);
+      onTranscript(text);
+      setState('idle');
+    } catch {
+      setErrorKey('transcribeFailed');
+      setState('idle');
+    }
+  };
+
+  const start = async (lang: SpeakLang) => {
+    setErrorKey(null);
+    if (
+      typeof MediaRecorder === 'undefined' ||
+      !navigator.mediaDevices?.getUserMedia
+    ) {
+      setErrorKey('micDenied');
+      return;
+    }
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      setErrorKey('micDenied');
+      return;
+    }
+    streamRef.current = stream;
+    const mime = pickRecordingMime();
+    const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    chunksRef.current = [];
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunksRef.current.push(e.data);
+    };
+    recorder.onstop = () => void finish(lang);
+    recorderRef.current = recorder;
+    recorder.start();
+    setState('recording');
+  };
+
+  const stop = () => {
+    recorderRef.current?.stop();
+  };
+
+  return { state, errorKey, start, stop };
+}
 
 export function RecordsPage() {
   const { t } = useTranslation();
@@ -85,10 +207,18 @@ function SectionHeading({ label, count }: { label: string; count: number }) {
 }
 
 function ComposeCard({ floor, residents }: { floor: string; residents: Resident[] }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const create = useCreateRecord();
   const [text, setText] = useState('');
   const [residentId, setResidentId] = useState('');
+  // 話す言語は既定を現在の UI 言語にし、職員が明示選択する (自動言語判定は使わない)
+  const [speakLang, setSpeakLang] = useState<SpeakLang>(() => toSpeakLang(i18n.language));
+
+  // 文字起こし結果は既存本文に追記する (手入力を消さない)。職員が Textarea で編集して送信する。
+  const voice = useVoiceCapture((transcript) => {
+    if (!transcript.trim()) return;
+    setText((prev) => (prev.trim() ? `${prev.trim()}\n${transcript}` : transcript));
+  });
 
   // 利用者は必ず選ぶ。LLM に「誰の記録か」を推定させない
   const canSubmit = text.trim().length > 0 && residentId !== '';
@@ -141,6 +271,50 @@ function ComposeCard({ floor, residents }: { floor: string; residents: Resident[
             onChange={(e) => setText(e.target.value)}
           />
         </div>
+        {/* 音声入力: 話す言語を選び、録音→文字起こし結果を上の本文へ追記する */}
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <Label htmlFor="speak-lang">{t('records.speakLang')}</Label>
+            <Select
+              id="speak-lang"
+              value={speakLang}
+              disabled={voice.state !== 'idle'}
+              onChange={(e) => setSpeakLang(e.target.value as SpeakLang)}
+            >
+              <option value="ja">日本語</option>
+              <option value="en">English</option>
+              <option value="vi">Tiếng Việt</option>
+            </Select>
+          </div>
+          {voice.state === 'recording' ? (
+            <Button variant="danger" onClick={() => voice.stop()}>
+              <Square aria-hidden="true" />
+              {t('records.stopRecording')}
+            </Button>
+          ) : (
+            <Button
+              variant="secondary"
+              disabled={voice.state === 'transcribing'}
+              onClick={() => void voice.start(speakLang)}
+            >
+              {voice.state === 'transcribing' ? (
+                <Spinner label={t('records.transcribing')} />
+              ) : (
+                <>
+                  <Mic aria-hidden="true" />
+                  {t('records.voiceInput')}
+                </>
+              )}
+            </Button>
+          )}
+          {voice.state === 'recording' && (
+            <span className="flex items-center gap-2 text-sub text-danger-ink">
+              <span aria-hidden="true" className="size-2 animate-pulse rounded-full bg-danger" />
+              {t('records.recording')}
+            </span>
+          )}
+        </div>
+        {voice.errorKey && <ErrorText>{t(`records.${voice.errorKey}`)}</ErrorText>}
         <div className="flex flex-wrap items-center gap-3">
           <Button disabled={create.isPending || !canSubmit} onClick={() => void onStructure()}>
             {create.isPending ? (
@@ -238,6 +412,17 @@ function DraftCard({
       <p className="mt-3 border-t border-warn-muted pt-3 text-caption text-label-2">
         {t('records.original')} ({record.lang}): {record.original_text}
       </p>
+      {/*
+        母語(en/vi)入力のとき、日本語記録(body_ja)を原文言語へ逆翻訳した確認用テキストを併記する。
+        原文(母語・そのまま読める)と逆翻訳を並べることで、外国人職員が「整形で意味が変わって
+        いないか」を承認前に母語で照合できる (human-in-the-loop の実効性を担保)。
+        表示は対応言語(en/vi)に限定し、LLM が日本語を zh 等と誤判定しても無関係な逆翻訳を出さない。
+      */}
+      {(record.lang === 'en' || record.lang === 'vi') && record.verification_text && (
+        <p className="mt-2 text-caption text-label-2">
+          {t('records.verification')}: {record.verification_text}
+        </p>
+      )}
       {approve.isError && <ErrorText>{t('common.error')}</ErrorText>}
       <div className="mt-4">
         <Button disabled={approve.isPending || !residentId} onClick={() => void onApprove()}>

@@ -179,6 +179,51 @@ export class HandoverStack extends cdk.Stack {
     const appUrl = `https://${distribution.distributionDomainName}`;
 
     // ---------------------------------------------------------------------
+    // 音声入力用 S3 バケット。ブラウザ録音をプリサインド URL で直 PUT し、
+    // バッチ Transcribe が文字起こしする。PII 音声・文字起こしとも 1 日で失効削除する
+    // (残さない + ストレージ実質ゼロ)。公開は禁止 (BLOCK_ALL)。
+    // ---------------------------------------------------------------------
+    const audioBucket = new s3.Bucket(this, 'AudioBucket', {
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // ハッカソン用
+      autoDeleteObjects: true,
+      // ブラウザからプリサインド URL で直 PUT するため、CloudFront 配信元のみ許可。
+      cors: [
+        {
+          allowedMethods: [s3.HttpMethods.PUT],
+          allowedOrigins: [appUrl],
+          allowedHeaders: ['*'],
+          maxAge: 3600,
+        },
+      ],
+      // 音声 (audio/) も文字起こし結果 (transcripts/) も 1 日で自動削除。
+      lifecycleRules: [{ expiration: cdk.Duration.days(1) }],
+    });
+
+    // api Lambda に音声バケットへの読み書きと Transcribe ジョブ操作を最小権限で付与する。
+    // 音声のアップロード先取得(GetObject)・プリサインド発行(PutObject)、および同一アカウント
+    // バケットに対する Transcribe の入出力アクセスは呼び出し元(api ロール)の S3 権限で足りる。
+    apiFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['s3:PutObject', 's3:GetObject'],
+        resources: [audioBucket.arnForObjects('*')],
+      }),
+    );
+    apiFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['transcribe:StartTranscriptionJob', 'transcribe:GetTranscriptionJob'],
+        // ジョブ名は wabisuke-{ulid}。他のジョブに触れないよう prefix で絞る。
+        resources: [`arn:aws:transcribe:*:${this.account}:transcription-job/wabisuke-*`],
+      }),
+    );
+    // バケット名は CDK リソース参照で注入 (ハードコードしない)。summarizer は使わない。
+    apiFn.addEnvironment('AUDIO_BUCKET', audioBucket.bucketName);
+
+    // ---------------------------------------------------------------------
     // HTTP API + JWT オーソライザ。/health を除く全ルートに認証必須。
     // 細かなルーティングは axum が担うため、catch-all をオーソライザ付きで通す。
     // ---------------------------------------------------------------------

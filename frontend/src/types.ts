@@ -34,6 +34,12 @@ export interface CareRecord {
   body_ja: string;
   original_text: string;
   lang: string;
+  /**
+   * lang≠ja のとき、body_ja を原文言語へ逆翻訳した確認用テキスト。
+   * 外国人職員が承認前に「日本語へ整形した内容」を母語で照合するために使う。
+   * ja のとき・逆翻訳が無いときは null/未設定。
+   */
+  verification_text?: string | null;
   status: RecordStatus;
   created_by: string;
   created_at: string;
@@ -73,6 +79,25 @@ export interface SummaryItem {
   resident_id: string | null;
   text: string;
   evidence_record_ids: string[];
+}
+
+/** 音声アップロード用プリサインド URL の発行結果。 */
+export interface AudioUploadUrl {
+  /** S3 へ直接 PUT するためのプリサインド URL。 */
+  url: string;
+  /** アップロード先キー (startTranscription にそのまま渡す)。 */
+  key: string;
+}
+
+/** 文字起こしジョブ開始の応答。 */
+export interface TranscriptionJob {
+  job_name: string;
+}
+
+/** 文字起こしの状態。completed のときのみ text を含む。 */
+export interface TranscriptionStatus {
+  status: 'in_progress' | 'failed' | 'completed';
+  text?: string;
 }
 
 /** 横断申し送りサマリ。 */
