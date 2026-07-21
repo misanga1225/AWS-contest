@@ -2,6 +2,8 @@
 // ビルド時結合を避けることで、同一ビルドを異なる環境へ配れる。
 // ローカル開発では Vite の環境変数 (VITE_*) にフォールバックする。
 
+import type { Shift } from '../types';
+
 /**
  * シフト帯の開始時刻 (HH:MM)。**表示用にローカル時刻へ変換済み**。
  *
@@ -15,6 +17,27 @@
 export interface ShiftHours {
   dayStart: string;
   nightStart: string;
+}
+
+/**
+ * 現在時刻がどのシフト帯かを判定する。
+ *
+ * シフト帯は SSM 由来 (config.json) をローカル時刻へ変換済み ([`ShiftHours`])。
+ * 未配信 (hours 無し) なら null を返し、呼び出し側でシフト表示や既定選択を省く。
+ * サマリ生成の既定シフトにも使い、夜勤帯に取った記録が日勤サマリから漏れるのを防ぐ。
+ */
+export function currentShift(hours: ShiftHours | undefined): Shift | null {
+  if (!hours) return null;
+  const now = new Date();
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const toMins = (hhmm: string): number => {
+    const [h, m] = hhmm.split(':');
+    return Number(h) * 60 + Number(m);
+  };
+  const day = toMins(hours.dayStart);
+  const night = toMins(hours.nightStart);
+  // 日勤帯 = dayStart 以上 nightStart 未満。日をまたぐ夜勤はその補集合。
+  return mins >= day && mins < night ? 'day' : 'night';
 }
 
 /** UTC の "HH:MM" を、本日の日付基準でローカルの "HH:MM" に変換する。 */
