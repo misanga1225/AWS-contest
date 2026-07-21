@@ -80,6 +80,17 @@ pub async fn create_draft(
         })
         .await?;
 
+    // 逆翻訳の確認用テキストは、アプリが対応する外国人職員の言語 (en/vi) のときだけ保持する。
+    // 逆翻訳 human-in-the-loop が意味を持つのは対応言語の職員が母語照合する場合に限られる。
+    // LLM が日本語 (漢字が多いと稀に起こる) を zh 等と誤判定しても、無関係な言語の逆翻訳を
+    // 承認画面に出さないためのガード。ja・非対応言語・空文字のときは None。
+    let vt = structured.verification_text.trim();
+    let verification_text = if !vt.is_empty() && matches!(structured.lang.as_str(), "en" | "vi") {
+        Some(vt.to_string())
+    } else {
+        None
+    };
+
     let record = CareRecord {
         schema_version: domain::SCHEMA_VERSION,
         id: new_id(),
@@ -89,6 +100,7 @@ pub async fn create_draft(
         body_ja: structured.body_ja,
         original_text: input.text,
         lang: structured.lang,
+        verification_text,
         status: RecordStatus::Draft,
         created_by: input.created_by,
         created_at: now_rfc3339(),
@@ -126,6 +138,10 @@ pub async fn approve(repo: &dyn Repository, input: ApproveInput) -> Result<CareR
     record.resident_id = input.resident_id;
     record.category = input.category;
     record.body_ja = input.body_ja;
+    // verification_text (逆翻訳) は draft 段階で母語照合を助けるための確認用であり、
+    // 承認時には更新も消去もしない (original_text/lang と同じく draft 時点の値を保持する)。
+    // 承認画面 (DraftCard) でのみ表示し、承認済みレコードでは表示しないため、職員が
+    // body_ja を編集して逆翻訳とズレても実害は無い。承認は職員が body_ja 自体を読んで確定する。
     record.status = RecordStatus::Approved;
     record.approved_by = Some(input.approved_by);
     record.approved_at = Some(now_rfc3339());

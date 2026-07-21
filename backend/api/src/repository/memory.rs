@@ -154,6 +154,7 @@ mod tests {
             body_ja: "x".to_string(),
             original_text: "x".to_string(),
             lang: "ja".to_string(),
+            verification_text: None,
             status,
             created_by: "u1".to_string(),
             created_at: "2026-07-19T03:00:00Z".to_string(),

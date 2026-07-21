@@ -20,6 +20,9 @@ pub struct AppConfig {
     /// 利用者別時系列 GSI の名前。
     pub index_name: String,
     pub bedrock_model_id: String,
+    /// 音声アップロード・文字起こし結果を置く S3 バケット名。
+    /// summarizer は使わないため、未設定でも起動を止めない (空文字許容)。
+    pub audio_bucket: String,
     pub shift: ShiftConfig,
     /// デモデータ初期化やサマリ一括生成の対象フロア。
     pub floors: Vec<String>,
@@ -35,6 +38,9 @@ impl AppConfig {
         // モデル ID は infra が SSM 値を BEDROCK_MODEL_ID として注入する。
         let bedrock_model_id = env::var("BEDROCK_MODEL_ID")
             .unwrap_or_else(|_| "apac.anthropic.claude-3-haiku-20240307-v1:0".to_string());
+        // 音声バケット名は infra が AUDIO_BUCKET として注入する。summarizer は使わないため
+        // 未設定でも起動は止めず、音声系エンドポイント使用時にのみ問題化する。
+        let audio_bucket = env::var("AUDIO_BUCKET").unwrap_or_default();
         let day_start = env::var("SHIFT_DAY_START").unwrap_or_else(|_| "00:00".to_string());
         let day_end = env::var("SHIFT_DAY_END").unwrap_or_else(|_| "09:00".to_string());
         let shift = ShiftConfig::from_hhmm(&day_start, &day_end)?;
@@ -48,8 +54,22 @@ impl AppConfig {
             table_name,
             index_name,
             bedrock_model_id,
+            audio_bucket,
             shift,
             floors,
         })
+    }
+}
+
+/// UI 言語コード (ja/en/vi) を Amazon Transcribe の言語コードへ写像する。
+///
+/// 話す言語は職員が画面で明示選択する (自動言語判定は使わない = 確実・低コスト)。
+/// 対応外の言語は `None` を返し、ハンドラで 400 にする。
+pub fn transcribe_language_code(lang: &str) -> Option<&'static str> {
+    match lang {
+        "ja" => Some("ja-JP"),
+        "en" => Some("en-US"),
+        "vi" => Some("vi-VN"),
+        _ => None,
     }
 }

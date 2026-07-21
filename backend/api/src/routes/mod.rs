@@ -14,6 +14,7 @@ pub mod demo;
 pub mod records;
 pub mod residents;
 pub mod summaries;
+pub mod transcribe;
 
 /// 全ルートを組み立てる。
 pub fn router(state: Arc<AppState>) -> Router {
@@ -30,6 +31,9 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/summaries", get(summaries::list))
         .route("/summaries/detail", get(summaries::detail))
         .route("/summaries/trigger", post(summaries::trigger))
+        .route("/uploads/audio-url", post(transcribe::create_upload_url))
+        .route("/transcribe", post(transcribe::start))
+        .route("/transcribe/{job}", get(transcribe::status))
         .with_state(state)
 }
 

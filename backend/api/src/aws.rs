@@ -10,6 +10,8 @@ use aws_smithy_http_client::{Builder, tls};
 
 use crate::config::AppConfig;
 use crate::llm::bedrock::BedrockLlm;
+use crate::media::s3::S3Storage;
+use crate::media::transcribe_aws::AwsTranscriber;
 use crate::repository::dynamo::DynamoRepository;
 use crate::state::AppState;
 
@@ -31,6 +33,8 @@ pub async fn build_state(config: AppConfig) -> Arc<AppState> {
     let shared = load_sdk_config().await;
     let dynamo = aws_sdk_dynamodb::Client::new(&shared);
     let bedrock = aws_sdk_bedrockruntime::Client::new(&shared);
+    let s3 = aws_sdk_s3::Client::new(&shared);
+    let transcribe = aws_sdk_transcribe::Client::new(&shared);
 
     let repo = Arc::new(DynamoRepository::new(
         dynamo,
@@ -38,5 +42,7 @@ pub async fn build_state(config: AppConfig) -> Arc<AppState> {
         config.index_name.clone(),
     ));
     let llm = Arc::new(BedrockLlm::new(bedrock, config.bedrock_model_id.clone()));
-    AppState::new(repo, llm, config)
+    let storage = Arc::new(S3Storage::new(s3, config.audio_bucket.clone()));
+    let transcriber = Arc::new(AwsTranscriber::new(transcribe, config.audio_bucket.clone()));
+    AppState::new(repo, llm, storage, transcriber, config)
 }

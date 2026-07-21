@@ -7,10 +7,10 @@ import { useTranslation } from 'react-i18next';
 import { Sparkles } from 'lucide-react';
 import { useApp } from '../lib/appContext';
 import { useRecords, useResidents, useSummaries, useTriggerSummary } from '../lib/queries';
-import type { CareRecord, HandoverSummary, Priority, Resident, Shift } from '../types';
+import type { CareRecord, HandoverSummary, Priority, Resident } from '../types';
 import { PriorityBadge } from '../components/badges';
 import { Button, Card, CardTitle, EmptyState, ErrorText, Skeleton, Spinner } from '../components/ui';
-import type { ShiftHours } from '../lib/config';
+import { currentShift } from '../lib/config';
 
 const PRIORITY_ORDER: Record<Priority, number> = { attention: 0, change: 1, none: 2 };
 
@@ -34,24 +34,6 @@ function isToday(iso: string): boolean {
     d.getMonth() === now.getMonth() &&
     d.getDate() === now.getDate()
   );
-}
-
-/**
- * 現在時刻がどのシフト帯かを判定する。
- * シフト帯は SSM 由来 (config.json)。未配信なら null を返し、UI はシフト表示を省く。
- */
-function currentShift(hours: ShiftHours | undefined): Shift | null {
-  if (!hours) return null;
-  const now = new Date();
-  const mins = now.getHours() * 60 + now.getMinutes();
-  const toMins = (hhmm: string): number => {
-    const [h, m] = hhmm.split(':');
-    return Number(h) * 60 + Number(m);
-  };
-  const day = toMins(hours.dayStart);
-  const night = toMins(hours.nightStart);
-  // 日勤帯 = dayStart 以上 nightStart 未満。日をまたぐ夜勤はその補集合。
-  return mins >= day && mins < night ? 'day' : 'night';
 }
 
 export function HomePage() {

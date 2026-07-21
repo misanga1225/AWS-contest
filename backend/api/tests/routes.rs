@@ -9,6 +9,7 @@ use api::AppState;
 use api::auth::AuthUser;
 use api::config::AppConfig;
 use api::llm::fake::FakeLlm;
+use api::media::fake::{FAKE_TRANSCRIPT, FakeStorage, FakeTranscriber};
 use api::repository::memory::InMemoryRepository;
 use axum::Router;
 use axum::body::{Body, to_bytes};
@@ -23,12 +24,15 @@ fn test_state() -> Arc<AppState> {
         table_name: "test-table".to_string(),
         index_name: "GSI1".to_string(),
         bedrock_model_id: "fake-model".to_string(),
+        audio_bucket: "test-audio-bucket".to_string(),
         shift: ShiftConfig::from_hhmm("00:00", "23:59").unwrap(), // 日勤に収める
         floors: vec!["1".to_string(), "2".to_string(), "3".to_string()],
     };
     AppState::new(
         Arc::new(InMemoryRepository::new()),
         Arc::new(FakeLlm::new()),
+        Arc::new(FakeStorage::new()),
+        Arc::new(FakeTranscriber::new()),
         config,
     )
 }
@@ -300,6 +304,166 @@ async fn create_record_requires_resident() {
         .unwrap();
     let records: Vec<CareRecord> = body_json(resp).await;
     assert!(records.is_empty(), "検証失敗時に draft を作ってはいけない");
+}
+
+/// 母語(vi)入力は draft に逆翻訳の確認用テキスト(verification_text)を持ち、
+/// 日本語(ja)入力は持たない。承認画面の human-in-the-loop 照合の土台になる。
+#[tokio::test]
+async fn draft_carries_verification_text_for_non_japanese() {
+    let app = app();
+
+    // 利用者を用意
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/residents",
+            Some(json!({ "floor": "1", "name": "逆翻訳 テスト", "room": "111" })),
+        ))
+        .await
+        .unwrap();
+    let resident: Resident = body_json(resp).await;
+
+    // ベトナム語(ASCII外・かな無し)の原文 → FakeLlm が verification_text を付ける
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/records",
+            Some(json!({
+                "floor": "1",
+                "resident_id": resident.id,
+                "text": "Ăn hết bữa trưa"
+            })),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let vi_draft: CareRecord = body_json(resp).await;
+    assert_eq!(vi_draft.lang, "vi");
+    assert!(
+        vi_draft.verification_text.is_some(),
+        "母語(非ja)の draft は確認用逆翻訳を持つ"
+    );
+
+    // 日本語の原文 → verification_text は None
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/records",
+            Some(json!({
+                "floor": "1",
+                "resident_id": resident.id,
+                "text": "昼食を全量摂取。"
+            })),
+        ))
+        .await
+        .unwrap();
+    let ja_draft: CareRecord = body_json(resp).await;
+    assert_eq!(ja_draft.lang, "ja");
+    assert!(
+        ja_draft.verification_text.is_none(),
+        "日本語入力に逆翻訳は不要"
+    );
+}
+
+/// 音声アップロード〜文字起こしの縦割り: URL発行 → ジョブ開始 → 完了でテキスト取得。
+#[tokio::test]
+async fn transcribe_flow_upload_start_poll() {
+    let app = app();
+
+    // 1. プリサインド URL 発行
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/uploads/audio-url",
+            Some(json!({ "content_type": "audio/webm", "ext": "webm" })),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let upload: Value = body_json(resp).await;
+    let key = upload["key"].as_str().unwrap().to_string();
+    assert!(key.starts_with("audio/"), "キーは audio/ 配下");
+    assert!(upload["url"].as_str().unwrap().starts_with("https://"));
+
+    // 2. 文字起こしジョブ開始
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/transcribe",
+            Some(json!({ "key": key, "lang": "ja" })),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let started: Value = body_json(resp).await;
+    let job = started["job_name"].as_str().unwrap().to_string();
+    assert!(job.starts_with("wabisuke-"));
+
+    // 3. 状態取得 → FakeTranscriber は即完了しテキストを返す
+    let resp = app
+        .clone()
+        .oneshot(authed("GET", &format!("/transcribe/{job}"), None))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let status: Value = body_json(resp).await;
+    assert_eq!(status["status"], "completed");
+    assert_eq!(status["text"], FAKE_TRANSCRIPT);
+}
+
+/// 未対応の音声形式・不正キー・不正言語は 400 で弾く。
+#[tokio::test]
+async fn transcribe_rejects_bad_input() {
+    let app = app();
+
+    // 未対応 content-type
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/uploads/audio-url",
+            Some(json!({ "content_type": "application/zip", "ext": "zip" })),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    // 不正キー (パストラバーサル)
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/transcribe",
+            Some(json!({ "key": "audio/../secret.webm", "lang": "ja" })),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    // 未対応言語
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/transcribe",
+            Some(json!({ "key": "audio/01HXABC.webm", "lang": "fr" })),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    // 不正ジョブ名
+    let resp = app
+        .clone()
+        .oneshot(authed("GET", "/transcribe/not-a-wabisuke-job", None))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 }
 
 /// 実在しない利用者を指定した投稿も 400。

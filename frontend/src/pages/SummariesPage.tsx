@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApp } from '../lib/appContext';
+import { currentShift } from '../lib/config';
 import { useRecords, useResidents, useSummaries, useTriggerSummary } from '../lib/queries';
 import type { CareRecord, HandoverSummary, Priority, Resident, Shift, SummaryItem } from '../types';
 import { PriorityBadge } from '../components/badges';
@@ -24,13 +25,15 @@ function todayStr(): string {
 
 export function SummariesPage() {
   const { t } = useTranslation();
-  const { floor } = useApp();
+  const { floor, config } = useApp();
   const summaries = useSummaries(floor);
   const approvedRecords = useRecords({ floor, status: 'approved' });
   // 退所者も含める。サマリが参照する利用者が退所していても氏名を解決できるようにするため
   const residents = useResidents(floor, true);
   const trigger = useTriggerSummary();
-  const [shift, setShift] = useState<Shift>('day');
+  // 既定は「現在のシフト」。夜勤帯に取った記録が日勤サマリから漏れて空に見えるのを防ぐ
+  // (シフト帯未配信なら day)。職員は必要に応じてセレクタで切り替えられる。
+  const [shift, setShift] = useState<Shift>(() => currentShift(config.shiftHours) ?? 'day');
 
   const latest: HandoverSummary | undefined = summaries.data?.[0];
 
