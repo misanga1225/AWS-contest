@@ -78,21 +78,37 @@ async fn handler(event: LambdaEvent<Value>) -> Result<Value, Error> {
     }))
 }
 
-/// イベントの date/shift 指定を解決する。省略時は現在のシフトを対象にする。
+/// イベントの date/shift 指定を解決する。
+///
+/// スケジューラは `{"shift":"night"}` のように shift だけを渡す (対象日は起動時刻から
+/// 導く)。date/shift を独立に解決し、shift だけ指定されたときは「いま終わったシフト」の
+/// 対象日を用いる。両方省略時のみ現在シフトにフォールバックする。
 fn resolve_target(
     config: &AppConfig,
     date: Option<&str>,
     shift: Option<&str>,
 ) -> Result<(NaiveDate, Shift), Error> {
+    let now = Utc::now();
+    let parse_shift =
+        |s: &str| Shift::from_str_opt(s).ok_or_else(|| Error::from(format!("不正なshift: {s}")));
+    let parse_date = |d: &str| {
+        NaiveDate::parse_from_str(d, "%Y-%m-%d")
+            .map_err(|_| Error::from(format!("不正なdate: {d}")))
+    };
+
     match (date, shift) {
-        (Some(d), Some(s)) => {
-            let date = NaiveDate::parse_from_str(d, "%Y-%m-%d")
-                .map_err(|_| Error::from(format!("不正なdate: {d}")))?;
-            let shift =
-                Shift::from_str_opt(s).ok_or_else(|| Error::from(format!("不正なshift: {s}")))?;
-            Ok((date, shift))
+        (Some(d), Some(s)) => Ok((parse_date(d)?, parse_shift(s)?)),
+        // shift のみ: いま終わったシフトの対象日を導く (境界起動を想定)。
+        (None, Some(s)) => {
+            let shift = parse_shift(s)?;
+            Ok((summaries::target_ended_shift(now, shift), shift))
         }
-        _ => Ok(summaries::target_from_now(config, Utc::now())),
+        // date のみ: シフトは現在シフトを採用する (通常来ない補助経路)。
+        (Some(d), None) => {
+            let (_, shift) = summaries::target_from_now(config, now);
+            Ok((parse_date(d)?, shift))
+        }
+        (None, None) => Ok(summaries::target_from_now(config, now)),
     }
 }
 
