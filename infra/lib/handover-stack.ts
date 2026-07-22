@@ -6,10 +6,12 @@ import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations
 import * as budgets from 'aws-cdk-lib/aws-budgets';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as scheduler from 'aws-cdk-lib/aws-scheduler';
@@ -71,6 +73,11 @@ export class HandoverStack extends cdk.Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       // ハッカソン用の使い捨て環境のため DESTROY(本番なら RETAIN にする)
       removalPolicy: cdk.RemovalPolicy.DESTROY,
+      // 誤操作・バグによる書き込みミスからの復旧手段(法定保存義務のある記録のため)
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
+      // 誤った delete-table を技術的に防ぐ。cdk destroy する際は先に
+      // deletionProtection: false へ変更して再デプロイしてから実行すること。
+      deletionProtection: true,
     });
 
     // GSI1: 利用者別時系列 (PK=RESIDENT#{id}, SK=RECORD#{ts}#{id})
@@ -104,7 +111,25 @@ export class HandoverStack extends cdk.Stack {
       // キャップとして機能する。枠を引き上げた場合は予約を追加してよい。
       environment: commonEnv,
     });
-    table.grantReadWriteData(apiFn);
+    // grantReadWriteData ではなく実際に発行される DynamoDB アクションだけを許可する。
+    // DeleteItem は residents::delete (記録0件の利用者のみ) のために必要
+    // (DynamoDB の IAM は PK しか条件化できず SK prefix では絞れないため、
+    // action 単位の最小化に留める)。Scan/UpdateItem/BatchWrite 等は一切使わない。
+    apiFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:Query', 'dynamodb:DeleteItem'],
+        resources: [table.tableArn],
+      }),
+    );
+    apiFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['dynamodb:Query'],
+        // has_records_for_resident (利用者削除判定) のみが GSI1 を引く。
+        resources: [`${table.tableArn}/index/${RESIDENT_INDEX_NAME}`],
+      }),
+    );
 
     // --- 要約 Lambda (Rust / arm64) ---
     const summarizerFn = new RustFunction(this, 'SummarizerFunction', {
@@ -115,7 +140,14 @@ export class HandoverStack extends cdk.Stack {
       // 予約同時実行はアカウント総枠(最小10)の制約により設定しない(ApiFunction 参照)。
       environment: commonEnv,
     });
-    table.grantReadWriteData(summarizerFn);
+    // summarizer はサマリ生成のみ。記録・利用者は読むだけで削除は一切しない。GSI1 も使わない。
+    summarizerFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:Query'],
+        resources: [table.tableArn],
+      }),
+    );
 
     // ---------------------------------------------------------------------
     // Bedrock 呼び出し権限: モデル ARN 単位で最小権限。ワイルドカードアクションは使わない。
@@ -203,13 +235,21 @@ export class HandoverStack extends cdk.Stack {
     });
 
     // api Lambda に音声バケットへの読み書きと Transcribe ジョブ操作を最小権限で付与する。
-    // 音声のアップロード先取得(GetObject)・プリサインド発行(PutObject)、および同一アカウント
-    // バケットに対する Transcribe の入出力アクセスは呼び出し元(api ロール)の S3 権限で足りる。
+    // PutObject は音声アップロード(audio/*)にのみ必要。GetObject は文字起こし結果
+    // (transcripts/*)の読み出しにのみ必要 — 音声本体を api Lambda が読み出す経路は無い
+    // (Transcribe サービス自身が audio/* を読む。それは api ロールとは別の権限で完結する)。
     apiFn.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: ['s3:PutObject', 's3:GetObject'],
-        resources: [audioBucket.arnForObjects('*')],
+        actions: ['s3:PutObject'],
+        resources: [audioBucket.arnForObjects('audio/*')],
+      }),
+    );
+    apiFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['s3:GetObject'],
+        resources: [audioBucket.arnForObjects('transcripts/*')],
       }),
     );
     apiFn.addToRolePolicy(
@@ -268,15 +308,76 @@ export class HandoverStack extends cdk.Stack {
       authorizer,
     });
 
-    // 既定ステージにスロットリング(rate/burst)を設定し、瞬間的な大量リクエストを抑制する。
+    // 既定ステージにスロットリング(rate/burst)とアクセスログを設定する。
     // HTTP API の L2 はステージ設定を直接公開しないため CfnStage にエスケープハッチで設定する。
+    const accessLogGroup = new logs.LogGroup(this, 'HttpApiAccessLogs', {
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // ハッカソン用
+    });
+    accessLogGroup.grantWrite(new iam.ServicePrincipal('apigateway.amazonaws.com'));
+
     const defaultStage = httpApi.defaultStage?.node.defaultChild as CfnStage | undefined;
     if (defaultStage) {
       defaultStage.defaultRouteSettings = {
         throttlingRateLimit: 20, // 定常 20 req/s
         throttlingBurstLimit: 40, // バースト 40
       };
+      defaultStage.accessLogSettings = {
+        destinationArn: accessLogGroup.logGroupArn,
+        format: JSON.stringify({
+          requestId: '$context.requestId',
+          ip: '$context.identity.sourceIp',
+          requestTime: '$context.requestTime',
+          httpMethod: '$context.httpMethod',
+          routeKey: '$context.routeKey',
+          status: '$context.status',
+          responseLength: '$context.responseLength',
+          integrationErrorMessage: '$context.integrationErrorMessage',
+        }),
+      };
     }
+
+    // ---------------------------------------------------------------------
+    // CloudFront セキュリティヘッダー。CSP は httpApi/audioBucket の値を参照するため、
+    // 両者が揃うここ(distribution 構築より後)で ResponseHeadersPolicy を作り、
+    // CfnDistribution のエスケープハッチで既定ビヘイビアへ後付けする
+    // (L2 の Distribution は構築後にビヘイビアを変更する API を公開していないため)。
+    // frontend/index.html が Google Fonts を外部読み込みしているため style-src/font-src に許可を足す。
+    // ---------------------------------------------------------------------
+    const headersPolicy = new cloudfront.ResponseHeadersPolicy(this, 'SecurityHeadersPolicy', {
+      securityHeadersBehavior: {
+        contentSecurityPolicy: {
+          contentSecurityPolicy: [
+            `default-src 'self'`,
+            `script-src 'self'`,
+            `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
+            `font-src 'self' https://fonts.gstatic.com`,
+            `img-src 'self' data:`,
+            `connect-src 'self' ${httpApi.apiEndpoint} https://cognito-idp.${this.region}.amazonaws.com https://${audioBucket.bucketRegionalDomainName}`,
+            `frame-ancestors 'none'`,
+            `base-uri 'self'`,
+            `object-src 'none'`,
+          ].join('; '),
+          override: true,
+        },
+        contentTypeOptions: { override: true },
+        frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
+        referrerPolicy: {
+          referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN,
+          override: true,
+        },
+        strictTransportSecurity: {
+          accessControlMaxAge: cdk.Duration.days(365),
+          includeSubdomains: true,
+          override: true,
+        },
+      },
+    });
+    const cfnDistribution = distribution.node.defaultChild as cloudfront.CfnDistribution;
+    cfnDistribution.addPropertyOverride(
+      'DistributionConfig.DefaultCacheBehavior.ResponseHeadersPolicyId',
+      headersPolicy.responseHeadersPolicyId,
+    );
 
     // ---------------------------------------------------------------------
     // フロントエンドの静的資産 + ランタイム設定(config.json)を S3 へ配置。
@@ -307,6 +408,13 @@ export class HandoverStack extends cdk.Stack {
     // 日勤終了(day_end)に day、夜勤終了(day_start)に night を生成する。
     // ---------------------------------------------------------------------
     this.addSummarySchedules(summarizerFn, settings);
+
+    // ---------------------------------------------------------------------
+    // CloudWatch Alarm: Lambda エラー率の監視。通知先(SNS等)は運用方針・宛先が
+    // 未確定のため今回は付けない。コンソールで OK/ALARM 状態を確認できる状態まで作り、
+    // 将来 addAlarmAction() を足すだけで通知を有効化できる疎結合な作りにしておく。
+    // ---------------------------------------------------------------------
+    this.addAlarms(apiFn, summarizerFn);
 
     // ---------------------------------------------------------------------
     // AWS Budgets: 月次コストの請求アラート。想定外の課金 (特に Bedrock 乱用) の保険。
@@ -393,6 +501,31 @@ export class HandoverStack extends cdk.Stack {
     makeSchedule('NightShiftEndSchedule', settings.shiftDayStart, 'night');
   }
 
+  /**
+   * Lambda エラー率の CloudWatch Alarm(通知アクションなし)。
+   *
+   * SNS 等の通知先は運用方針(誰が受け取るか・エラー時の対応フロー)が未確定のため
+   * 今回は付けない。アラーム自体はコンソール上で OK/ALARM 状態を確認できる。
+   */
+  private addAlarms(apiFn: lambda.IFunction, summarizerFn: lambda.IFunction): void {
+    new cloudwatch.Alarm(this, 'ApiErrorsAlarm', {
+      // 全 REST API の入り口。Bedrock 呼び出し失敗・DynamoDB エラー・不正リクエスト急増等を
+      // まとめて検知できる代表的な健全性指標として選定。
+      metric: apiFn.metricErrors({ period: cdk.Duration.minutes(5) }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    new cloudwatch.Alarm(this, 'SummarizerErrorsAlarm', {
+      // シフト終業時の自動サマリ生成が失敗すると申し送り機能そのものが機能しなくなるため、
+      // 放置しないための指標として選定。
+      metric: summarizerFn.metricErrors({ period: cdk.Duration.minutes(5) }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+  }
+
   /** 月次コストの請求アラート (Budgets)。context にメールがあれば通知を付ける。 */
   private addBudget(): void {
     const email = this.node.tryGetContext('budgetEmail');
@@ -401,6 +534,13 @@ export class HandoverStack extends cdk.Stack {
 
     // メール未指定なら閾値超過を通知できないため、通知は付けず budget のみ作る
     // (コンソールで金額は確認可能)。通知を有効化するには -c budgetEmail=... を渡す。
+    if (!(typeof email === 'string' && email.length > 0)) {
+      cdk.Annotations.of(this).addWarning(
+        'budgetEmail context 未指定のため、コスト超過の通知メールは送信されません' +
+          '(予算自体は作成され、金額はコンソールで確認できます)。' +
+          '通知を有効にするには -c budgetEmail=... を指定してください。',
+      );
+    }
     const notificationsWithSubscribers =
       typeof email === 'string' && email.length > 0
         ? [
