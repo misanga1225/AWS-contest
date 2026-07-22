@@ -69,6 +69,12 @@ export interface TriggerSummaryInput {
   floor: string;
   date?: string;
   shift?: Shift;
+  /**
+   * 既存サマリがあっても再生成する。職員が明示的に押す手動生成では true を送る
+   * (冪等の force=false はスケジューラの再試行による重複課金防止用であり、
+   * 人手の「生成」ボタンは常に最新の承認済み記録から作り直すのが期待挙動)。
+   */
+  force?: boolean;
 }
 
 export class ApiClient {

@@ -35,10 +35,17 @@ export function SummariesPage() {
   // (シフト帯未配信なら day)。職員は必要に応じてセレクタで切り替えられる。
   const [shift, setShift] = useState<Shift>(() => currentShift(config.shiftHours) ?? 'day');
 
-  const latest: HandoverSummary | undefined = summaries.data?.[0];
+  // 表示するサマリは「本日 + 選択中シフト」に一致するもの。
+  // 全体最新 (data[0]) を出すとシフトを切り替えても表示が変わらず、別シフトを生成した
+  // 瞬間に無関係なサマリへ切り替わってしまう。手動生成が対象とする本日分に揃える。
+  const today = todayStr();
+  const selected: HandoverSummary | undefined = summaries.data?.find(
+    (s) => s.date === today && s.shift === shift,
+  );
 
   const onGenerate = async () => {
-    await trigger.mutateAsync({ floor, date: todayStr(), shift });
+    // force=true: 既存の空/古いサマリをそのまま返さず、最新の承認済み記録から作り直す
+    await trigger.mutateAsync({ floor, date: today, shift, force: true });
   };
 
   const shiftOptions = [
@@ -79,13 +86,13 @@ export function SummariesPage() {
           <SkeletonCard />
         </div>
       )}
-      {latest === undefined && !summaries.isLoading && (
+      {selected === undefined && !summaries.isLoading && (
         <EmptyState message={t('summaries.empty')} />
       )}
 
-      {latest && (
+      {selected && (
         <SummaryView
-          summary={latest}
+          summary={selected}
           records={approvedRecords.data ?? []}
           residents={residents.data ?? []}
         />
@@ -126,16 +133,24 @@ function SummaryView({
         {t(`summaries.${summary.shift === 'night' ? 'night' : 'day'}`)}
       </p>
 
-      <div className="space-y-3">
-        {items.map((item, idx) => (
-          <ItemCard
-            key={idx}
-            item={item}
-            residentLabel={residentName(item.resident_id)}
-            recordById={recordById}
-          />
-        ))}
-      </div>
+      {/* 項目ゼロのサマリは灰色の生成時刻行しか描画されず「生成できていない」ように
+          見えるため、対象記録が無かったことを明示する (生成は成功している)。 */}
+      {items.length === 0 ? (
+        <Card tone="sunken">
+          <p className="text-sub text-label-2">{t('summaries.noItems')}</p>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {items.map((item, idx) => (
+            <ItemCard
+              key={idx}
+              item={item}
+              residentLabel={residentName(item.resident_id)}
+              recordById={recordById}
+            />
+          ))}
+        </div>
+      )}
 
       {appended.length > 0 && (
         <Card tone="accent">
