@@ -235,13 +235,14 @@ export class HandoverStack extends cdk.Stack {
     });
 
     // api Lambda に音声バケットへの読み書きと Transcribe ジョブ操作を最小権限で付与する。
-    // PutObject は音声アップロード(audio/*)にのみ必要。GetObject は文字起こし結果
-    // (transcripts/*)の読み出しにのみ必要 — 音声本体を api Lambda が読み出す経路は無い
-    // (Transcribe サービス自身が audio/* を読む。それは api ロールとは別の権限で完結する)。
+    // PutObject は音声アップロード(audio/*)に必要。GetObject も audio/* に必要
+    // (HeadObject でアップロード済み音声のサイズを検証してから Transcribe を起動するため
+    // — HeadObject は IAM 上 s3:GetObject 権限を要求する)。GetObject は文字起こし結果
+    // (transcripts/*)の読み出しにも必要。
     apiFn.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: ['s3:PutObject'],
+        actions: ['s3:PutObject', 's3:GetObject'],
         resources: [audioBucket.arnForObjects('audio/*')],
       }),
     );
@@ -260,8 +261,34 @@ export class HandoverStack extends cdk.Stack {
         resources: [`arn:aws:transcribe:*:${this.account}:transcription-job/wabisuke-*`],
       }),
     );
+    // Amazon Transcribe サービス自身が音声(audio/*)を読み、結果(transcripts/*)を書き込む
+    // ためのロール。BlockPublicAccess を張った同一アカウントのバケットでも、Transcribe が
+    // 暗黙にアクセスできるとは限らない(実際に "S3 bucket can't be accessed" で失敗するのを
+    // 確認した)ため、DataAccessRoleArn で明示的に権限を渡す。
+    const transcribeDataAccessRole = new iam.Role(this, 'TranscribeDataAccessRole', {
+      assumedBy: new iam.ServicePrincipal('transcribe.amazonaws.com'),
+    });
+    transcribeDataAccessRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['s3:GetObject'],
+        resources: [audioBucket.arnForObjects('audio/*')],
+      }),
+    );
+    transcribeDataAccessRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['s3:PutObject'],
+        resources: [audioBucket.arnForObjects('transcripts/*')],
+      }),
+    );
+    // StartTranscriptionJob で DataAccessRoleArn を渡すには、渡す側(apiFn)がその特定の
+    // ロールに対する iam:PassRole 権限を持つ必要がある(AWSの特権昇格防止ガードレール)。
+    transcribeDataAccessRole.grantPassRole(apiFn.grantPrincipal);
+
     // バケット名は CDK リソース参照で注入 (ハードコードしない)。summarizer は使わない。
     apiFn.addEnvironment('AUDIO_BUCKET', audioBucket.bucketName);
+    apiFn.addEnvironment('TRANSCRIBE_DATA_ACCESS_ROLE_ARN', transcribeDataAccessRole.roleArn);
 
     // ---------------------------------------------------------------------
     // HTTP API + JWT オーソライザ。/health を除く全ルートに認証必須。
@@ -338,10 +365,13 @@ export class HandoverStack extends cdk.Stack {
     }
 
     // ---------------------------------------------------------------------
-    // CloudFront セキュリティヘッダー。CSP は httpApi/audioBucket の値を参照するため、
-    // 両者が揃うここ(distribution 構築より後)で ResponseHeadersPolicy を作り、
-    // CfnDistribution のエスケープハッチで既定ビヘイビアへ後付けする
-    // (L2 の Distribution は構築後にビヘイビアを変更する API を公開していないため)。
+    // CloudFront セキュリティヘッダー。
+    // 注意: CSP の connect-src に httpApi.apiEndpoint / audioBucket.bucketRegionalDomainName
+    // を Fn::GetAtt で直接埋め込むと、httpApi/audioBucket 側が(CORSの allowOrigins に)
+    // distribution のドメイン名を参照しているため、
+    // distribution → SecurityHeadersPolicy → httpApi/audioBucket → distribution という
+    // 循環参照になり cdk deploy が "Circular dependency" で失敗する(実際に検証済み)。
+    // そのため具体的なリソース参照はせず、同リージョンのワイルドカードパターンで代用する。
     // frontend/index.html が Google Fonts を外部読み込みしているため style-src/font-src に許可を足す。
     // ---------------------------------------------------------------------
     const headersPolicy = new cloudfront.ResponseHeadersPolicy(this, 'SecurityHeadersPolicy', {
@@ -353,7 +383,7 @@ export class HandoverStack extends cdk.Stack {
             `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
             `font-src 'self' https://fonts.gstatic.com`,
             `img-src 'self' data:`,
-            `connect-src 'self' ${httpApi.apiEndpoint} https://cognito-idp.${this.region}.amazonaws.com https://${audioBucket.bucketRegionalDomainName}`,
+            `connect-src 'self' https://*.execute-api.${this.region}.amazonaws.com https://cognito-idp.${this.region}.amazonaws.com https://*.s3.${this.region}.amazonaws.com`,
             `frame-ancestors 'none'`,
             `base-uri 'self'`,
             `object-src 'none'`,

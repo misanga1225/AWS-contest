@@ -23,6 +23,9 @@ pub struct AppConfig {
     /// 音声アップロード・文字起こし結果を置く S3 バケット名。
     /// summarizer は使わないため、未設定でも起動を止めない (空文字許容)。
     pub audio_bucket: String,
+    /// Amazon Transcribe が audio/*・transcripts/* を読み書きするために引き受けるロール ARN。
+    /// summarizer は使わないため、未設定でも起動を止めない (空文字許容)。
+    pub transcribe_data_access_role_arn: String,
     pub shift: ShiftConfig,
     /// デモデータ初期化やサマリ一括生成の対象フロア。
     pub floors: Vec<String>,
@@ -41,6 +44,8 @@ impl AppConfig {
         // 音声バケット名は infra が AUDIO_BUCKET として注入する。summarizer は使わないため
         // 未設定でも起動は止めず、音声系エンドポイント使用時にのみ問題化する。
         let audio_bucket = env::var("AUDIO_BUCKET").unwrap_or_default();
+        let transcribe_data_access_role_arn =
+            env::var("TRANSCRIBE_DATA_ACCESS_ROLE_ARN").unwrap_or_default();
         let day_start = env::var("SHIFT_DAY_START").unwrap_or_else(|_| "00:00".to_string());
         let day_end = env::var("SHIFT_DAY_END").unwrap_or_else(|_| "09:00".to_string());
         let shift = ShiftConfig::from_hhmm(&day_start, &day_end)?;
@@ -55,6 +60,7 @@ impl AppConfig {
             index_name,
             bedrock_model_id,
             audio_bucket,
+            transcribe_data_access_role_arn,
             shift,
             floors,
         })
