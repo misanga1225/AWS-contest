@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { getCurrentUser, signIn, signOut } from 'aws-amplify/auth';
+import { registerForceLogout } from './authEvents';
 
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
@@ -50,6 +51,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUsername(null);
     setStatus('unauthenticated');
   }, []);
+
+  // API 応答が 401 を返したら (lib/authEvents 経由で) 強制的にログアウトする。
+  // トークン失効後も画面上は「ログイン中」に見え続けるのを防ぐ。
+  useEffect(() => {
+    registerForceLogout(() => {
+      void logout();
+    });
+    return () => registerForceLogout(null);
+  }, [logout]);
 
   const value = useMemo<AuthContextValue>(
     () => ({ status, username, login, logout }),

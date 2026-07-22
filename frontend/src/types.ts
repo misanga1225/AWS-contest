@@ -1,111 +1,70 @@
 // バックエンド domain 型に対応する TypeScript 型。API 応答には必ず型を付ける (any 禁止)。
+// 実行時検証は lib/schemas.ts の zod スキーマで行い、型はそこから z.infer で導出する
+// (型定義とランタイム検証が乖離しないようにするため)。
+
+import type { z } from 'zod';
+import {
+  AudioUploadUrlSchema,
+  CareRecordSchema,
+  CategorySchema,
+  DeleteResidentOutcomeSchema,
+  DeleteResidentResponseSchema,
+  HandoverSummarySchema,
+  PrioritySchema,
+  RecordStatusSchema,
+  ResidentSchema,
+  ResidentStatusSchema,
+  ShiftSchema,
+  SummaryItemSchema,
+  TranscriptionJobSchema,
+  TranscriptionStatusSchema,
+} from './lib/schemas';
 
 /** ケア記録のカテゴリ (domain::Category と一致)。 */
-export type Category = 'meal' | 'hydration' | 'toileting' | 'vitals' | 'incident' | 'note';
+export type Category = z.infer<typeof CategorySchema>;
 
 /** 記録の確定状態。 */
-export type RecordStatus = 'draft' | 'approved';
+export type RecordStatus = z.infer<typeof RecordStatusSchema>;
 
 /** サマリの優先度 3 段階。 */
-export type Priority = 'attention' | 'change' | 'none';
+export type Priority = z.infer<typeof PrioritySchema>;
 
 /** シフト種別。 */
-export type Shift = 'day' | 'night';
+export type Shift = z.infer<typeof ShiftSchema>;
 
 /** サポートする UI 言語。 */
 export type Lang = 'ja' | 'en' | 'vi';
 
-export const CATEGORIES: readonly Category[] = [
-  'meal',
-  'hydration',
-  'toileting',
-  'vitals',
-  'incident',
-  'note',
-];
+export const CATEGORIES: readonly Category[] = CategorySchema.options;
 
 /** ケア記録。 */
-export interface CareRecord {
-  schema_version: number;
-  id: string;
-  floor: string;
-  resident_id: string;
-  category: Category;
-  body_ja: string;
-  original_text: string;
-  lang: string;
-  /**
-   * lang≠ja のとき、body_ja を原文言語へ逆翻訳した確認用テキスト。
-   * 外国人職員が承認前に「日本語へ整形した内容」を母語で照合するために使う。
-   * ja のとき・逆翻訳が無いときは null/未設定。
-   */
-  verification_text?: string | null;
-  status: RecordStatus;
-  created_by: string;
-  created_at: string;
-  approved_by: string | null;
-  approved_at: string | null;
-}
+export type CareRecord = z.infer<typeof CareRecordSchema>;
 
 /**
  * 利用者の在籍状態。
  * ケア記録には法定の保存義務があるため、記録がある利用者は物理削除せず discharged にする。
  */
-export type ResidentStatus = 'active' | 'discharged';
+export type ResidentStatus = z.infer<typeof ResidentStatusSchema>;
 
 /** 利用者マスタ。 */
-export interface Resident {
-  schema_version: number;
-  id: string;
-  floor: string;
-  name: string;
-  room: string;
-  baseline: string;
-  created_at: string;
-  status: ResidentStatus;
-  discharged_at: string | null;
-}
+export type Resident = z.infer<typeof ResidentSchema>;
 
 /** 利用者の削除要求の結果。記録の有無で挙動が変わる。 */
-export type DeleteResidentOutcome = 'deleted' | 'discharged';
+export type DeleteResidentOutcome = z.infer<typeof DeleteResidentOutcomeSchema>;
 
-export interface DeleteResidentResponse {
-  outcome: DeleteResidentOutcome;
-}
+export type DeleteResidentResponse = z.infer<typeof DeleteResidentResponseSchema>;
 
 /** サマリの 1 項目。 */
-export interface SummaryItem {
-  priority: Priority;
-  resident_id: string | null;
-  text: string;
-  evidence_record_ids: string[];
-}
+export type SummaryItem = z.infer<typeof SummaryItemSchema>;
 
 /** 音声アップロード用プリサインド URL の発行結果。 */
-export interface AudioUploadUrl {
-  /** S3 へ直接 PUT するためのプリサインド URL。 */
-  url: string;
-  /** アップロード先キー (startTranscription にそのまま渡す)。 */
-  key: string;
-}
+export type AudioUploadUrl = z.infer<typeof AudioUploadUrlSchema>;
 
 /** 文字起こしジョブ開始の応答。 */
-export interface TranscriptionJob {
-  job_name: string;
-}
+export type TranscriptionJob = z.infer<typeof TranscriptionJobSchema>;
 
 /** 文字起こしの状態。completed のときのみ text を含む。 */
-export interface TranscriptionStatus {
-  status: 'in_progress' | 'failed' | 'completed';
-  text?: string;
-}
+export type TranscriptionStatus = z.infer<typeof TranscriptionStatusSchema>;
 
 /** 横断申し送りサマリ。 */
-export interface HandoverSummary {
-  schema_version: number;
-  floor: string;
-  date: string;
-  shift: string;
-  items: SummaryItem[];
-  generated_at: string;
-}
+export type HandoverSummary = z.infer<typeof HandoverSummarySchema>;

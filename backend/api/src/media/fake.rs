@@ -11,12 +11,30 @@ use super::{JobState, Storage, StorageError, TranscribeError, Transcriber};
 pub const FAKE_TRANSCRIPT: &str = "フェイク文字起こし結果";
 
 /// プリサインド URL を決定的に返し、結果取得は Transcribe 形式の JSON を返すフェイク。
-#[derive(Debug, Default, Clone)]
-pub struct FakeStorage;
+///
+/// `content_length` はサイズ上限チェックのテスト用に差し替え可能 (既定は十分小さい値)。
+#[derive(Debug, Clone)]
+pub struct FakeStorage {
+    content_length: u64,
+}
+
+impl Default for FakeStorage {
+    fn default() -> Self {
+        Self {
+            content_length: 1024,
+        }
+    }
+}
 
 impl FakeStorage {
     pub fn new() -> Self {
-        FakeStorage
+        Self::default()
+    }
+
+    /// アップロード済みとみなすオブジェクトサイズを指定するフェイク
+    /// (サイズ上限超過時の拒否をテストするため)。
+    pub fn with_content_length(content_length: u64) -> Self {
+        Self { content_length }
     }
 }
 
@@ -33,6 +51,10 @@ impl Storage for FakeStorage {
         let json =
             format!(r#"{{"results":{{"transcripts":[{{"transcript":"{FAKE_TRANSCRIPT}"}}]}}}}"#);
         Ok(json.into_bytes())
+    }
+
+    async fn content_length(&self, _key: &str) -> Result<u64, StorageError> {
+        Ok(self.content_length)
     }
 }
 

@@ -59,7 +59,14 @@ impl IntoResponse for ApiError {
         // サーバ内部エラーの詳細はクライアントに返さずログにのみ残す
         // (利用者の個人情報は含めない)。認証失敗も検知できるよう記録する。
         if status == StatusCode::INTERNAL_SERVER_ERROR {
-            tracing::error!(error = %self, "internal error");
+            // source チェーン(内部の詳細な原因)もログに残す。%self だけだと
+            // ApiError の定型メッセージ(例:「文字起こしエラー」)しか出ず、
+            // 実際にAWS SDKが返した理由が分からず調査できないため。
+            tracing::error!(
+                error = %self,
+                source = ?std::error::Error::source(&self).map(|e| e.to_string()),
+                "internal error"
+            );
         } else if status == StatusCode::UNAUTHORIZED {
             tracing::warn!("authentication failed");
         }

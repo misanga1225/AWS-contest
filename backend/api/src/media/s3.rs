@@ -52,12 +52,24 @@ impl Storage for S3Storage {
             .key(key)
             .send()
             .await
-            .map_err(|e| StorageError::Get(e.to_string()))?;
+            .map_err(|e| StorageError::Get(format!("{e:?}")))?;
         let bytes = resp
             .body
             .collect()
             .await
             .map_err(|e| StorageError::Get(e.to_string()))?;
         Ok(bytes.into_bytes().to_vec())
+    }
+
+    async fn content_length(&self, key: &str) -> Result<u64, StorageError> {
+        let resp = self
+            .client
+            .head_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .send()
+            .await
+            .map_err(|e| StorageError::Get(format!("{e:?}")))?;
+        Ok(resp.content_length().unwrap_or(0).max(0) as u64)
     }
 }

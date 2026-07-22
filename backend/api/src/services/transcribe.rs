@@ -25,6 +25,10 @@ const ALLOWED_AUDIO: &[(&str, &str)] = &[
     ("audio/flac", "flac"),
 ];
 
+/// アップロード音声の最大サイズ。プリサインド PUT 自体にはサイズ上限を埋め込めないため、
+/// Transcribe 起動 (課金) 前にここで弾く。数分の発話には十分な余裕を持たせた値。
+const MAX_AUDIO_BYTES: u64 = 10 * 1024 * 1024; // 10MB
+
 /// プリサインド URL 発行の結果。
 pub struct AudioUploadUrl {
     /// S3 へ直接 PUT するためのプリサインド URL。
@@ -67,6 +71,7 @@ pub async fn create_upload_url(
 
 /// アップロード済み音声の文字起こしジョブを開始し、ジョブ名を返す。
 pub async fn start_transcription(
+    storage: &dyn Storage,
     transcriber: &dyn Transcriber,
     key: &str,
     lang: &str,
@@ -74,6 +79,15 @@ pub async fn start_transcription(
     // key は create_upload_url が発行した `audio/{ulid}.{ext}` 形式のみ受け付ける。
     if !is_valid_audio_key(key) {
         return Err(ApiError::BadRequest("不正な音声キーです".to_string()));
+    }
+    // プリサインド PUT にはサイズ上限を埋め込めないため、Transcribe (課金対象) を
+    // 起動する前にアップロード済みオブジェクトの実サイズを確認して弾く。
+    let size = storage.content_length(key).await?;
+    if size > MAX_AUDIO_BYTES {
+        return Err(ApiError::BadRequest(format!(
+            "音声ファイルが大きすぎます(最大{}MB)",
+            MAX_AUDIO_BYTES / (1024 * 1024)
+        )));
     }
     let language_code = transcribe_language_code(lang)
         .ok_or_else(|| ApiError::BadRequest(format!("未対応の言語です: {lang}")))?;
@@ -152,6 +166,28 @@ fn parse_transcript(bytes: &[u8]) -> Result<String, ApiError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::media::fake::{FakeStorage, FakeTranscriber};
+
+    #[tokio::test]
+    async fn start_transcription_rejects_oversized_audio() {
+        // 上限(10MB)を超えるオブジェクトは Transcribe(課金対象)を呼ぶ前に拒否する。
+        let storage = FakeStorage::with_content_length(MAX_AUDIO_BYTES + 1);
+        let transcriber = FakeTranscriber::new();
+        let err = start_transcription(&storage, &transcriber, "audio/01HXABC.webm", "ja")
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ApiError::BadRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn start_transcription_allows_audio_within_limit() {
+        let storage = FakeStorage::with_content_length(MAX_AUDIO_BYTES);
+        let transcriber = FakeTranscriber::new();
+        let job = start_transcription(&storage, &transcriber, "audio/01HXABC.webm", "ja")
+            .await
+            .unwrap();
+        assert!(job.starts_with("wabisuke-"));
+    }
 
     #[test]
     fn valid_audio_key_accepts_expected_shape() {

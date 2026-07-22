@@ -1,11 +1,15 @@
 // ケア記録画面: 母語入力→LLM構造化→下書き確認・修正→承認、承認済み一覧。
 
 import { useRef, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Mic, Square } from 'lucide-react';
 import { useApi, useApp } from '../lib/appContext';
 import type { ApiClient, SpeakLang } from '../lib/api';
+import { MAX_RECORD_TEXT_CHARS } from '../lib/constants';
 import { useApproveRecord, useCreateRecord, useRecords, useResidents } from '../lib/queries';
 import type { CareRecord, Category, Resident } from '../types';
 import { CATEGORIES } from '../types';
@@ -206,29 +210,42 @@ function SectionHeading({ label, count }: { label: string; count: number }) {
   );
 }
 
+// 利用者は必ず選ぶ (LLM に「誰の記録か」を推定させない)。文字数上限は
+// backend/api/src/services/records.rs::MAX_TEXT_CHARS と一致させる。
+const composeSchema = z.object({
+  resident_id: z.string().min(1),
+  text: z.string().trim().min(1).max(MAX_RECORD_TEXT_CHARS),
+});
+type ComposeValues = z.infer<typeof composeSchema>;
+
 function ComposeCard({ floor, residents }: { floor: string; residents: Resident[] }) {
   const { t, i18n } = useTranslation();
   const create = useCreateRecord();
-  const [text, setText] = useState('');
-  const [residentId, setResidentId] = useState('');
   // 話す言語は既定を現在の UI 言語にし、職員が明示選択する (自動言語判定は使わない)
   const [speakLang, setSpeakLang] = useState<SpeakLang>(() => toSpeakLang(i18n.language));
+
+  const { register, handleSubmit, reset, setValue, getValues, watch, formState } =
+    useForm<ComposeValues>({
+      resolver: zodResolver(composeSchema),
+      mode: 'onChange',
+      defaultValues: { resident_id: '', text: '' },
+    });
+  const text = watch('text');
 
   // 文字起こし結果は既存本文に追記する (手入力を消さない)。職員が Textarea で編集して送信する。
   const voice = useVoiceCapture((transcript) => {
     if (!transcript.trim()) return;
-    setText((prev) => (prev.trim() ? `${prev.trim()}\n${transcript}` : transcript));
+    const prev = getValues('text');
+    setValue('text', prev.trim() ? `${prev.trim()}\n${transcript}` : transcript, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
   });
 
-  // 利用者は必ず選ぶ。LLM に「誰の記録か」を推定させない
-  const canSubmit = text.trim().length > 0 && residentId !== '';
-
-  const onStructure = async () => {
-    if (!canSubmit) return;
-    await create.mutateAsync({ floor, resident_id: residentId, text });
-    setText('');
-    setResidentId('');
-  };
+  const onSubmit = handleSubmit(async (values) => {
+    await create.mutateAsync({ floor, resident_id: values.resident_id, text: values.text });
+    reset();
+  });
 
   // 利用者が 1 人も登録されていないと投稿できない。行き止まりにせず登録画面へ誘導する
   if (residents.length === 0) {
@@ -249,88 +266,91 @@ function ComposeCard({ floor, residents }: { floor: string; residents: Resident[
   return (
     <Card>
       <CardTitle className="mb-6">{t('records.compose')}</CardTitle>
-      <div className="space-y-4">
-        <div>
-          <Label htmlFor="resident">{t('records.resident')}</Label>
-          <Select id="resident" value={residentId} onChange={(e) => setResidentId(e.target.value)}>
-            <option value="">{t('records.selectResident')}</option>
-            {residents.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name} ({r.room})
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="memo">{t('records.memo')}</Label>
-          <Textarea
-            id="memo"
-            rows={3}
-            value={text}
-            placeholder={t('records.placeholder')}
-            onChange={(e) => setText(e.target.value)}
-          />
-        </div>
-        {/* 音声入力: 話す言語を選び、録音→文字起こし結果を上の本文へ追記する */}
-        <div className="flex flex-wrap items-end gap-3">
+      <form onSubmit={(e) => void onSubmit(e)}>
+        <div className="space-y-4">
           <div>
-            <Label htmlFor="speak-lang">{t('records.speakLang')}</Label>
-            <Select
-              id="speak-lang"
-              value={speakLang}
-              disabled={voice.state !== 'idle'}
-              onChange={(e) => setSpeakLang(e.target.value as SpeakLang)}
-            >
-              <option value="ja">日本語</option>
-              <option value="en">English</option>
-              <option value="vi">Tiếng Việt</option>
+            <Label htmlFor="resident">{t('records.resident')}</Label>
+            <Select id="resident" {...register('resident_id')}>
+              <option value="">{t('records.selectResident')}</option>
+              {residents.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name} ({r.room})
+                </option>
+              ))}
             </Select>
           </div>
-          {voice.state === 'recording' ? (
-            <Button variant="danger" onClick={() => voice.stop()}>
-              <Square aria-hidden="true" />
-              {t('records.stopRecording')}
-            </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              disabled={voice.state === 'transcribing'}
-              onClick={() => void voice.start(speakLang)}
-            >
-              {voice.state === 'transcribing' ? (
-                <Spinner label={t('records.transcribing')} />
+          <div>
+            <Label htmlFor="memo">{t('records.memo')}</Label>
+            <Textarea id="memo" rows={3} placeholder={t('records.placeholder')} {...register('text')} />
+            <p className="mt-1 text-caption text-label-3">
+              {text.length}/{MAX_RECORD_TEXT_CHARS}
+            </p>
+          </div>
+          {/* 音声入力: 話す言語を選び、録音→文字起こし結果を上の本文へ追記する */}
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <Label htmlFor="speak-lang">{t('records.speakLang')}</Label>
+              <Select
+                id="speak-lang"
+                value={speakLang}
+                disabled={voice.state !== 'idle'}
+                onChange={(e) => setSpeakLang(e.target.value as SpeakLang)}
+              >
+                <option value="ja">日本語</option>
+                <option value="en">English</option>
+                <option value="vi">Tiếng Việt</option>
+              </Select>
+            </div>
+            {voice.state === 'recording' ? (
+              <Button variant="danger" onClick={() => voice.stop()}>
+                <Square aria-hidden="true" />
+                {t('records.stopRecording')}
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                disabled={voice.state === 'transcribing'}
+                onClick={() => void voice.start(speakLang)}
+              >
+                {voice.state === 'transcribing' ? (
+                  <Spinner label={t('records.transcribing')} />
+                ) : (
+                  <>
+                    <Mic aria-hidden="true" />
+                    {t('records.voiceInput')}
+                  </>
+                )}
+              </Button>
+            )}
+            {voice.state === 'recording' && (
+              <span className="flex items-center gap-2 text-sub text-danger-ink">
+                <span aria-hidden="true" className="size-2 animate-pulse rounded-full bg-danger" />
+                {t('records.recording')}
+              </span>
+            )}
+          </div>
+          {voice.errorKey && <ErrorText>{t(`records.${voice.errorKey}`)}</ErrorText>}
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="submit" disabled={create.isPending || !formState.isValid}>
+              {create.isPending ? (
+                <Spinner label={t('records.structuring')} />
               ) : (
-                <>
-                  <Mic aria-hidden="true" />
-                  {t('records.voiceInput')}
-                </>
+                t('records.structure')
               )}
             </Button>
-          )}
-          {voice.state === 'recording' && (
-            <span className="flex items-center gap-2 text-sub text-danger-ink">
-              <span aria-hidden="true" className="size-2 animate-pulse rounded-full bg-danger" />
-              {t('records.recording')}
-            </span>
-          )}
-        </div>
-        {voice.errorKey && <ErrorText>{t(`records.${voice.errorKey}`)}</ErrorText>}
-        <div className="flex flex-wrap items-center gap-3">
-          <Button disabled={create.isPending || !canSubmit} onClick={() => void onStructure()}>
-            {create.isPending ? (
-              <Spinner label={t('records.structuring')} />
-            ) : (
-              t('records.structure')
+            {!formState.isValid && !create.isPending && (
+              <span className="text-sub text-label-3">
+                {formState.errors.resident_id
+                  ? t('records.selectResidentHint')
+                  : text.length > MAX_RECORD_TEXT_CHARS
+                    ? t('records.tooLongHint', { max: MAX_RECORD_TEXT_CHARS })
+                    : t('records.enterMemoHint')}
+              </span>
             )}
-          </Button>
-          {!canSubmit && !create.isPending && (
-            <span className="text-sub text-label-3">
-              {residentId === '' ? t('records.selectResidentHint') : t('records.enterMemoHint')}
-            </span>
-          )}
+          </div>
+          {create.isError && <ErrorText>{t('common.error')}</ErrorText>}
         </div>
-        {create.isError && <ErrorText>{t('common.error')}</ErrorText>}
-      </div>
+      </form>
     </Card>
   );
 }

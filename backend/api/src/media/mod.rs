@@ -53,6 +53,12 @@ pub trait Storage: Send + Sync {
 
     /// オブジェクト本文をバイト列で取得する。
     async fn get_object(&self, key: &str) -> Result<Vec<u8>, StorageError>;
+
+    /// オブジェクトのサイズ (バイト数) を取得する。本文は取得しない (HeadObject 相当)。
+    ///
+    /// プリサインド URL 自体にはサイズ上限を埋め込めないため、アップロード完了後・
+    /// Transcribe 起動前にここでサイズを検証し、上限超過なら課金前に弾く。
+    async fn content_length(&self, key: &str) -> Result<u64, StorageError>;
 }
 
 /// バッチ文字起こし (Amazon Transcribe) の抽象。

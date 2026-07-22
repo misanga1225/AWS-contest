@@ -5,7 +5,9 @@
 
 use async_trait::async_trait;
 use aws_sdk_transcribe::Client;
-use aws_sdk_transcribe::types::{LanguageCode, Media, TranscriptionJobStatus};
+use aws_sdk_transcribe::types::{
+    JobExecutionSettings, LanguageCode, Media, TranscriptionJobStatus,
+};
 
 use super::{JobState, TranscribeError, Transcriber};
 
@@ -14,11 +16,18 @@ pub struct AwsTranscriber {
     client: Client,
     /// 音声入力と結果 JSON の出力を兼ねるバケット。
     bucket: String,
+    /// Transcribe サービス自身が audio/*・transcripts/* を読み書きするために引き受けるロール。
+    /// 同一アカウントでも BlockPublicAccess を張ったバケットへ暗黙にはアクセスできないため必須。
+    data_access_role_arn: String,
 }
 
 impl AwsTranscriber {
-    pub fn new(client: Client, bucket: String) -> Self {
-        Self { client, bucket }
+    pub fn new(client: Client, bucket: String, data_access_role_arn: String) -> Self {
+        Self {
+            client,
+            bucket,
+            data_access_role_arn,
+        }
     }
 }
 
@@ -33,6 +42,12 @@ impl Transcriber for AwsTranscriber {
     ) -> Result<(), TranscribeError> {
         let media_uri = format!("s3://{}/{}", self.bucket, media_key);
         let media = Media::builder().media_file_uri(media_uri).build();
+        // DataAccessRoleArn は StartTranscriptionJob 直下ではなく JobExecutionSettings 経由。
+        // AllowDeferredExecution は DataAccessRoleArn を含める場合セットで必須(SDK仕様)。
+        let job_execution_settings = JobExecutionSettings::builder()
+            .data_access_role_arn(&self.data_access_role_arn)
+            .allow_deferred_execution(false)
+            .build();
         self.client
             .start_transcription_job()
             .transcription_job_name(job_name)
@@ -40,9 +55,12 @@ impl Transcriber for AwsTranscriber {
             .media(media)
             .output_bucket_name(&self.bucket)
             .output_key(output_key)
+            .job_execution_settings(job_execution_settings)
             .send()
             .await
-            .map_err(|e| TranscribeError::Start(e.to_string()))?;
+            // Display (to_string) は AWS SDK のエラーだと "service error" のような
+            // 詳細の無い文言になることがあるため、実際の理由が分かる Debug 形式を使う。
+            .map_err(|e| TranscribeError::Start(format!("{e:?}")))?;
         Ok(())
     }
 
@@ -53,7 +71,7 @@ impl Transcriber for AwsTranscriber {
             .transcription_job_name(job_name)
             .send()
             .await
-            .map_err(|e| TranscribeError::Get(e.to_string()))?;
+            .map_err(|e| TranscribeError::Get(format!("{e:?}")))?;
         let status = resp
             .transcription_job()
             .and_then(|j| j.transcription_job_status());

@@ -25,6 +25,7 @@ fn test_state() -> Arc<AppState> {
         index_name: "GSI1".to_string(),
         bedrock_model_id: "fake-model".to_string(),
         audio_bucket: "test-audio-bucket".to_string(),
+        transcribe_data_access_role_arn: "arn:aws:iam::000000000000:role/test".to_string(),
         shift: ShiftConfig::from_hhmm("00:00", "23:59").unwrap(), // 日勤に収める
         floors: vec!["1".to_string(), "2".to_string(), "3".to_string()],
     };

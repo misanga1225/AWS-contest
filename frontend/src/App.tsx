@@ -1,11 +1,13 @@
 // ルーティングとプロバイダ構成。認証状態でログイン画面/アプリを切り替える。
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { RuntimeConfig } from './lib/config';
 import { AppProvider } from './lib/appContext';
 import { AuthProvider, useAuth } from './lib/auth';
+import { ApiError } from './lib/api';
+import { triggerForceLogout } from './lib/authEvents';
 import { Layout, PlaceholderPage } from './components/Layout';
 import { Spinner } from './components/ui';
 import { LoginPage } from './pages/LoginPage';
@@ -15,8 +17,15 @@ import { ResidentsPage } from './pages/ResidentsPage';
 import { RecordsPage } from './pages/RecordsPage';
 import { SummariesPage } from './pages/SummariesPage';
 
+/** セッション切れ(401)を検知したら強制ログアウトする。応答検証エラー(502合成)は対象外。 */
+function handleAuthError(error: unknown): void {
+  if (error instanceof ApiError && error.status === 401) triggerForceLogout();
+}
+
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 10_000 } },
+  queryCache: new QueryCache({ onError: handleAuthError }),
+  mutationCache: new MutationCache({ onError: handleAuthError }),
 });
 
 function AuthGate() {

@@ -66,8 +66,13 @@ pub async fn start(
     _user: AuthUser,
     Json(body): Json<StartBody>,
 ) -> Result<Json<StartResponse>, ApiError> {
-    let job_name =
-        svc::start_transcription(state.transcriber.as_ref(), &body.key, &body.lang).await?;
+    let job_name = svc::start_transcription(
+        state.storage.as_ref(),
+        state.transcriber.as_ref(),
+        &body.key,
+        &body.lang,
+    )
+    .await?;
     Ok(Json(StartResponse { job_name }))
 }
 

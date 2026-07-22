@@ -43,6 +43,10 @@ pub async fn build_state(config: AppConfig) -> Arc<AppState> {
     ));
     let llm = Arc::new(BedrockLlm::new(bedrock, config.bedrock_model_id.clone()));
     let storage = Arc::new(S3Storage::new(s3, config.audio_bucket.clone()));
-    let transcriber = Arc::new(AwsTranscriber::new(transcribe, config.audio_bucket.clone()));
+    let transcriber = Arc::new(AwsTranscriber::new(
+        transcribe,
+        config.audio_bucket.clone(),
+        config.transcribe_data_access_role_arn.clone(),
+    ));
     AppState::new(repo, llm, storage, transcriber, config)
 }
