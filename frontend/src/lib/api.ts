@@ -1,7 +1,7 @@
 // 型付き API クライアント。全応答に型を付け、Cognito idToken を Authorization に載せる。
 
 import { fetchAuthSession } from 'aws-amplify/auth';
-import type { z } from 'zod';
+import { z } from 'zod';
 import {
   AudioUploadUrlSchema,
   CareRecordSchema,
@@ -178,6 +178,11 @@ export class ApiClient {
     if (params.date) q.set('date', params.date);
     if (params.status) q.set('status', params.status);
     return this.request('GET', `/records?${q.toString()}`, CareRecordSchema.array());
+  }
+  /** 下書きを削除する (承認済みは削除不可)。応答は 204 (本文なし) の想定。 */
+  deleteRecord(id: string, floor: string, createdAt: string): Promise<void> {
+    const q = new URLSearchParams({ floor, created_at: createdAt });
+    return this.request('DELETE', `/records/${encodeURIComponent(id)}?${q.toString()}`, z.void());
   }
 
   // --- 音声入力 (Transcribe) ---

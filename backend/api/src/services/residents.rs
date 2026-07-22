@@ -26,6 +26,7 @@ pub enum DeleteOutcome {
 /// 利用者を新規作成する。
 pub async fn create(repo: &dyn Repository, input: ResidentInput) -> Result<Resident, ApiError> {
     validate(&input)?;
+    ensure_room_available(repo, &input.floor, &input.room, None).await?;
     let resident = Resident {
         schema_version: domain::SCHEMA_VERSION,
         id: new_id(),
@@ -53,6 +54,7 @@ pub async fn update(
         .get_resident(floor, id)
         .await?
         .ok_or(ApiError::NotFound)?;
+    ensure_room_available(repo, &input.floor, &input.room, Some(&existing.id)).await?;
     let resident = Resident {
         schema_version: domain::SCHEMA_VERSION,
         id: existing.id,
@@ -115,6 +117,35 @@ pub async fn delete(
         tracing::info!(resident_id = %id, floor = %floor, "resident deleted (no records)");
         Ok(DeleteOutcome::Deleted)
     }
+}
+
+/// 同じフロアの在籍中の利用者に同じ部屋番号が無いか確認する。
+///
+/// `exclude_id` は更新時に自分自身を除外するために使う (部屋番号を変えずに保存できるように)。
+/// 部屋番号未入力 (空文字) はチェック対象外 (複数人が「未割り当て」でも衝突ではない)。
+/// 退所済みの利用者の部屋番号は空いているとみなす (新しい利用者が使ってよい)。
+async fn ensure_room_available(
+    repo: &dyn Repository,
+    floor: &str,
+    room: &str,
+    exclude_id: Option<&str>,
+) -> Result<(), ApiError> {
+    let room = room.trim();
+    if room.is_empty() {
+        return Ok(());
+    }
+    let residents = repo.list_residents(floor).await?;
+    let taken = residents.iter().any(|r| {
+        r.status == ResidentStatus::Active
+            && r.room.trim() == room
+            && Some(r.id.as_str()) != exclude_id
+    });
+    if taken {
+        return Err(ApiError::BadRequest(format!(
+            "部屋番号「{room}」は既に使用されています"
+        )));
+    }
+    Ok(())
 }
 
 fn validate(input: &ResidentInput) -> Result<(), ApiError> {

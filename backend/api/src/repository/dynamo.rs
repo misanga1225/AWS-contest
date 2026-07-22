@@ -229,6 +229,29 @@ impl Repository for DynamoRepository {
         Ok(())
     }
 
+    async fn delete_record_if_draft(
+        &self,
+        floor: &str,
+        created_at: &str,
+        id: &str,
+    ) -> Result<(), RepoError> {
+        self.client
+            .delete_item()
+            .table_name(&self.table)
+            .key("PK", AttributeValue::S(keys::floor_pk(floor)))
+            .key("SK", AttributeValue::S(keys::record_sk(created_at, id)))
+            .condition_expression("attribute_not_exists(PK) OR #st <> :approved")
+            .expression_attribute_names("#st", "status")
+            .expression_attribute_values(":approved", AttributeValue::S("approved".to_string()))
+            .send()
+            .await
+            .map_err(|e| match e.as_service_error() {
+                Some(se) if se.is_conditional_check_failed_exception() => RepoError::Conflict,
+                _ => RepoError::Dynamo(e.to_string()),
+            })?;
+        Ok(())
+    }
+
     async fn put_summary(&self, summary: &HandoverSummary) -> Result<(), RepoError> {
         self.put_with_keys(
             summary,

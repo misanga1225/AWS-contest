@@ -667,6 +667,125 @@ async fn update_does_not_resurrect_discharged_resident() {
     );
 }
 
+/// 下書きは削除できる。
+#[tokio::test]
+async fn delete_draft_record_succeeds() {
+    let app = app();
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/residents",
+            Some(json!({ "floor": "1", "name": "下書き削除 太郎", "room": "301" })),
+        ))
+        .await
+        .unwrap();
+    let resident: Resident = body_json(resp).await;
+
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/records",
+            Some(json!({ "floor": "1", "resident_id": resident.id, "text": "誤って作った下書き" })),
+        ))
+        .await
+        .unwrap();
+    let draft: CareRecord = body_json(resp).await;
+
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "DELETE",
+            &format!(
+                "/records/{}?floor=1&created_at={}",
+                draft.id, draft.created_at
+            ),
+            None,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+    let resp = app
+        .clone()
+        .oneshot(authed("GET", "/records?floor=1", None))
+        .await
+        .unwrap();
+    let records: Vec<CareRecord> = body_json(resp).await;
+    assert!(records.is_empty(), "削除した下書きは一覧に出ない");
+}
+
+/// 承認済み記録は削除できない (訂正は新規記録として追加する運用のため)。
+#[tokio::test]
+async fn delete_approved_record_is_rejected() {
+    let app = app();
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/residents",
+            Some(json!({ "floor": "1", "name": "承認削除 花子", "room": "302" })),
+        ))
+        .await
+        .unwrap();
+    let resident: Resident = body_json(resp).await;
+
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/records",
+            Some(json!({ "floor": "1", "resident_id": resident.id, "text": "承認予定" })),
+        ))
+        .await
+        .unwrap();
+    let draft: CareRecord = body_json(resp).await;
+
+    app.clone()
+        .oneshot(authed(
+            "PUT",
+            &format!("/records/{}/approve", draft.id),
+            Some(json!({
+                "floor": "1",
+                "created_at": draft.created_at,
+                "resident_id": resident.id,
+                "category": draft.category,
+                "body_ja": draft.body_ja
+            })),
+        ))
+        .await
+        .unwrap();
+
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "DELETE",
+            &format!(
+                "/records/{}?floor=1&created_at={}",
+                draft.id, draft.created_at
+            ),
+            None,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::CONFLICT);
+}
+
+/// 存在しない記録の削除は 404。
+#[tokio::test]
+async fn delete_unknown_record_is_not_found() {
+    let resp = app()
+        .oneshot(authed(
+            "DELETE",
+            "/records/does-not-exist?floor=1&created_at=2026-07-19T03:00:00Z",
+            None,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
 /// 存在しない利用者の削除は 404。
 #[tokio::test]
 async fn delete_unknown_resident_is_not_found() {
@@ -675,6 +794,127 @@ async fn delete_unknown_resident_is_not_found() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+/// 同じフロアで部屋番号が重複する新規登録は拒否される。
+#[tokio::test]
+async fn create_resident_rejects_duplicate_room_on_same_floor() {
+    let app = app();
+    app.clone()
+        .oneshot(authed(
+            "POST",
+            "/residents",
+            Some(json!({ "floor": "1", "name": "先住 太郎", "room": "201" })),
+        ))
+        .await
+        .unwrap();
+
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/residents",
+            Some(json!({ "floor": "1", "name": "後発 花子", "room": "201" })),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+/// 違うフロアなら同じ部屋番号でも登録できる (重複判定はフロア単位)。
+#[tokio::test]
+async fn create_resident_allows_same_room_on_different_floor() {
+    let app = app();
+    app.clone()
+        .oneshot(authed(
+            "POST",
+            "/residents",
+            Some(json!({ "floor": "1", "name": "1階 太郎", "room": "201" })),
+        ))
+        .await
+        .unwrap();
+
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/residents",
+            Some(json!({ "floor": "2", "name": "2階 花子", "room": "201" })),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
+}
+
+/// 退所済み利用者の部屋番号は空いているとみなし、新規登録で再利用できる。
+#[tokio::test]
+async fn create_resident_allows_room_of_discharged_resident() {
+    let app = app();
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/residents",
+            Some(json!({ "floor": "1", "name": "退所予定 太郎", "room": "201" })),
+        ))
+        .await
+        .unwrap();
+    let resident: Resident = body_json(resp).await;
+    // 記録を作って退所(論理削除)にする
+    app.clone()
+        .oneshot(authed(
+            "POST",
+            "/records",
+            Some(json!({ "floor": "1", "resident_id": resident.id, "text": "特記なし" })),
+        ))
+        .await
+        .unwrap();
+    app.clone()
+        .oneshot(authed(
+            "DELETE",
+            &format!("/residents/{}?floor=1", resident.id),
+            None,
+        ))
+        .await
+        .unwrap();
+
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/residents",
+            Some(json!({ "floor": "1", "name": "新規 花子", "room": "201" })),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
+}
+
+/// 更新時、自分自身の部屋番号を変えずに保存できる (自己衝突しない)。
+#[tokio::test]
+async fn update_resident_allows_keeping_own_room() {
+    let app = app();
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "POST",
+            "/residents",
+            Some(json!({ "floor": "1", "name": "本人 太郎", "room": "201" })),
+        ))
+        .await
+        .unwrap();
+    let resident: Resident = body_json(resp).await;
+
+    let resp = app
+        .clone()
+        .oneshot(authed(
+            "PUT",
+            &format!("/residents/{}", resident.id),
+            Some(json!({ "floor": "1", "name": "本人 太郎", "room": "201", "baseline": "更新" })),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
 }
 
 fn today() -> String {
