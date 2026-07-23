@@ -10,13 +10,9 @@ import { useRecords, useResidents, useSummaries, useTriggerSummary } from '../li
 import type { CareRecord, HandoverSummary, Priority, Resident } from '../types';
 import { PriorityBadge } from '../components/badges';
 import { Button, Card, CardTitle, EmptyState, ErrorText, Skeleton, Spinner } from '../components/ui';
-import { currentShift } from '../lib/config';
+import { currentShift, targetDateForShift } from '../lib/config';
 
 const PRIORITY_ORDER: Record<Priority, number> = { attention: 0, change: 1, none: 2 };
-
-function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 /** created_at (ISO) の時刻部分を HH:MM で返す。パースできなければ空文字。 */
 function timeOf(iso: string): string {
@@ -64,7 +60,10 @@ export function HomePage() {
   const latest: HandoverSummary | undefined = summaries.data?.[0];
 
   const onGenerate = async () => {
-    await trigger.mutateAsync({ floor, date: todayStr(), shift: shift ?? 'day' });
+    const effectiveShift = shift ?? 'day';
+    // 夜勤は日をまたぐため「今日」ではなく対象日を逆算する (SummariesPage と同じ規約)
+    const date = targetDateForShift(config.shiftHours, effectiveShift);
+    await trigger.mutateAsync({ floor, date, shift: effectiveShift });
     void navigate('/summaries');
   };
 
