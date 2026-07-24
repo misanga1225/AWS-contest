@@ -124,6 +124,9 @@ const resources = {
         listApproved: '承認済み記録',
         listDraft: '未承認の下書き',
         empty: 'まだ記録がありません。',
+        deleteDraft: '下書きを削除',
+        confirmDeleteDraft: '下書きを削除しますか？',
+        confirmDeleteDraftBody: 'この下書きは元に戻せません。承認済みの記録は削除できません。',
       },
       categories: {
         meal: '食事',
@@ -268,6 +271,9 @@ const resources = {
         listApproved: 'Approved records',
         listDraft: 'Unapproved drafts',
         empty: 'No records yet.',
+        deleteDraft: 'Delete draft',
+        confirmDeleteDraft: 'Delete this draft?',
+        confirmDeleteDraftBody: 'This draft cannot be recovered. Approved records cannot be deleted.',
       },
       categories: {
         meal: 'Meal',
@@ -412,6 +418,9 @@ const resources = {
         listApproved: 'Ghi chép đã duyệt',
         listDraft: 'Bản nháp chưa duyệt',
         empty: 'Chưa có ghi chép.',
+        deleteDraft: 'Xoá bản nháp',
+        confirmDeleteDraft: 'Xoá bản nháp này?',
+        confirmDeleteDraftBody: 'Không thể khôi phục bản nháp này. Không thể xoá ghi chép đã duyệt.',
       },
       categories: {
         meal: 'Ăn uống',

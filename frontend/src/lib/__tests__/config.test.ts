@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { loadConfig } from '../config';
+import { loadConfig, targetDateForShift } from '../config';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -77,5 +77,35 @@ describe('loadConfig', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network')));
     const config = await loadConfig();
     expect(config.floors).toEqual(['1', '2', '3']);
+  });
+});
+
+describe('targetDateForShift', () => {
+  const hours = { dayStart: '09:00', nightStart: '18:00' };
+
+  it('日勤は常に当日の日付を返す', () => {
+    const now = new Date(2026, 6, 23, 22, 0);
+    expect(targetDateForShift(hours, 'day', now)).toBe('2026-07-23');
+  });
+
+  it('夜勤かつ日勤開始前 (前夜からの夜勤中) は前日の日付を返す', () => {
+    // 7/23 7:00 = 7/22 夜勤 (18:00開始) がまだ続いている時間帯
+    const now = new Date(2026, 6, 23, 7, 0);
+    expect(targetDateForShift(hours, 'night', now)).toBe('2026-07-22');
+  });
+
+  it('夜勤かつ日勤開始後 (今夜の夜勤はこれから) は当日の日付を返す', () => {
+    const now = new Date(2026, 6, 23, 22, 0);
+    expect(targetDateForShift(hours, 'night', now)).toBe('2026-07-23');
+  });
+
+  it('シフト帯未配信 (hours 無し) なら常に当日の日付を返す', () => {
+    const now = new Date(2026, 6, 23, 7, 0);
+    expect(targetDateForShift(undefined, 'night', now)).toBe('2026-07-23');
+  });
+
+  it('月をまたぐ場合も正しく前日を計算する', () => {
+    const now = new Date(2026, 7, 1, 7, 0); // 8/1 7:00 → 7/31 夜勤中
+    expect(targetDateForShift(hours, 'night', now)).toBe('2026-07-31');
   });
 });

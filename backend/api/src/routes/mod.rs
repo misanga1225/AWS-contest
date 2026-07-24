@@ -22,6 +22,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/health", get(health))
         .route("/records", post(records::create).get(records::list))
         .route("/records/{id}/approve", put(records::approve))
+        .route("/records/{id}", axum::routing::delete(records::delete))
         .route("/residents", get(residents::list).post(residents::create))
         .route(
             "/residents/{id}",

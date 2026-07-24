@@ -76,6 +76,23 @@ impl Repository for InMemoryRepository {
             .collect())
     }
 
+    async fn delete_record_if_draft(
+        &self,
+        floor: &str,
+        created_at: &str,
+        id: &str,
+    ) -> Result<(), RepoError> {
+        let key = (keys::floor_pk(floor), keys::record_sk(created_at, id));
+        let mut guard = lock(&self.records)?;
+        if let Some(existing) = guard.get(&key)
+            && existing.status == RecordStatus::Approved
+        {
+            return Err(RepoError::Conflict);
+        }
+        guard.remove(&key);
+        Ok(())
+    }
+
     async fn has_records_for_resident(&self, resident_id: &str) -> Result<bool, RepoError> {
         Ok(lock(&self.records)?
             .values()

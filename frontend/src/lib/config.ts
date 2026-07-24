@@ -40,6 +40,35 @@ export function currentShift(hours: ShiftHours | undefined): Shift | null {
   return mins >= day && mins < night ? 'day' : 'night';
 }
 
+/**
+ * 選択中のシフトが指す対象日 (YYYY-MM-DD, ローカル基準) を返す。
+ *
+ * 日勤は日をまたがないので常に今日。夜勤は backend (`services::summaries::target_ended_shift`)
+ * と同じ規約で「開始日」の日付を返す: 現在時刻がまだ日勤開始前 (=前夜からの夜勤が続いている
+ * 時間帯) なら前日、日勤開始後 (=今夜の夜勤はこれから) なら今日。
+ * サマリの一覧取得・生成トリガの両方で、この日付を「探す/送る」対象として使う。
+ */
+export function targetDateForShift(
+  hours: ShiftHours | undefined,
+  shift: Shift,
+  now: Date = new Date(),
+): string {
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  const dateStr = (d: Date): string => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  if (shift === 'day' || !hours) return dateStr(now);
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const toMins = (hhmm: string): number => {
+    const [h, m] = hhmm.split(':');
+    return Number(h) * 60 + Number(m);
+  };
+  if (mins < toMins(hours.dayStart)) {
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    return dateStr(yesterday);
+  }
+  return dateStr(now);
+}
+
 /** UTC の "HH:MM" を、本日の日付基準でローカルの "HH:MM" に変換する。 */
 function utcHhmmToLocal(hhmm: string): string {
   const [h, m] = hhmm.split(':').map(Number);

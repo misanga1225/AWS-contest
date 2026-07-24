@@ -89,6 +89,16 @@ export function useApproveRecord() {
   });
 }
 
+export function useDeleteRecord() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, floor, createdAt }: { id: string; floor: string; createdAt: string }) =>
+      api.deleteRecord(id, floor, createdAt),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['records'] }),
+  });
+}
+
 // --- サマリ ---
 export function useSummaries(floor: string) {
   const api = useApi();

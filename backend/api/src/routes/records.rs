@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use axum::Json;
 use axum::extract::{Path, Query, State};
+use axum::http::StatusCode;
 use chrono::NaiveDate;
 use domain::shift::Shift;
 use domain::{CareRecord, Category, RecordStatus};
@@ -77,6 +78,24 @@ pub async fn approve(
     )
     .await?;
     Ok(Json(record))
+}
+
+/// DELETE /records/{id}?floor=&created_at= のクエリ。
+#[derive(Debug, Deserialize)]
+pub struct DeleteQuery {
+    pub floor: String,
+    pub created_at: String,
+}
+
+/// DELETE /records/{id}?floor=&created_at= — 下書きを削除する (承認済みは削除不可)。
+pub async fn delete(
+    State(state): State<Arc<AppState>>,
+    _user: AuthUser,
+    Path(id): Path<String>,
+    Query(q): Query<DeleteQuery>,
+) -> Result<StatusCode, ApiError> {
+    svc::delete_draft(state.repo.as_ref(), &q.floor, &q.created_at, &id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// GET /records のクエリ。

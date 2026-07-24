@@ -6,14 +6,21 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { Mic, Square } from 'lucide-react';
+import { Mic, Square, Trash2 } from 'lucide-react';
 import { useApi, useApp } from '../lib/appContext';
 import type { ApiClient, SpeakLang } from '../lib/api';
 import { MAX_RECORD_TEXT_CHARS } from '../lib/constants';
-import { useApproveRecord, useCreateRecord, useRecords, useResidents } from '../lib/queries';
+import {
+  useApproveRecord,
+  useCreateRecord,
+  useDeleteRecord,
+  useRecords,
+  useResidents,
+} from '../lib/queries';
 import type { CareRecord, Category, Resident } from '../types';
 import { CATEGORIES } from '../types';
 import { CategoryBadge } from '../components/badges';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import {
   Button,
   Card,
@@ -366,9 +373,11 @@ function DraftCard({
 }) {
   const { t } = useTranslation();
   const approve = useApproveRecord();
+  const remove = useDeleteRecord();
   const [residentId, setResidentId] = useState(record.resident_id);
   const [category, setCategory] = useState<Category>(record.category);
   const [bodyJa, setBodyJa] = useState(record.body_ja);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const onApprove = async () => {
     await approve.mutateAsync({
@@ -381,6 +390,11 @@ function DraftCard({
         body_ja: bodyJa,
       },
     });
+  };
+
+  const onDelete = async () => {
+    setConfirmingDelete(false);
+    await remove.mutateAsync({ id: record.id, floor, createdAt: record.created_at });
   };
 
   return (
@@ -444,11 +458,29 @@ function DraftCard({
         </p>
       )}
       {approve.isError && <ErrorText>{t('common.error')}</ErrorText>}
-      <div className="mt-4">
+      {remove.isError && <ErrorText>{t('common.error')}</ErrorText>}
+      <div className="mt-4 flex flex-wrap items-center gap-3">
         <Button disabled={approve.isPending || !residentId} onClick={() => void onApprove()}>
           {approve.isPending ? <Spinner label={t('records.approving')} /> : t('records.approve')}
         </Button>
+        <Button
+          variant="ghost"
+          disabled={remove.isPending}
+          onClick={() => setConfirmingDelete(true)}
+        >
+          <Trash2 aria-hidden="true" />
+          {t('records.deleteDraft')}
+        </Button>
       </div>
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={t('records.confirmDeleteDraft')}
+        message={t('records.confirmDeleteDraftBody')}
+        confirmLabel={t('records.deleteDraft')}
+        cancelLabel={t('common.cancel')}
+        onCancel={() => setConfirmingDelete(false)}
+        onConfirm={() => void onDelete()}
+      />
     </Card>
   );
 }

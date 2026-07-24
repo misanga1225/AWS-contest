@@ -46,6 +46,18 @@ pub trait Repository: Send + Sync {
     /// フロアの全記録を時系列で取得する (`begins_with(SK, "RECORD#")`)。
     async fn list_records_by_floor(&self, floor: &str) -> Result<Vec<CareRecord>, RepoError>;
 
+    /// 未承認 (draft) の場合のみ記録を削除する。
+    ///
+    /// 承認済みなら [`RepoError::Conflict`] を返し、承認済み記録の物理削除を原子的に防ぐ
+    /// (get→delete の間に承認された場合の競合対策。put_record_if_unapproved と対の設計)。
+    /// 対象が存在しない場合は何もせず成功扱いにする (削除の意図は既に達成されているため)。
+    async fn delete_record_if_draft(
+        &self,
+        floor: &str,
+        created_at: &str,
+        id: &str,
+    ) -> Result<(), RepoError>;
+
     /// 指定利用者の記録が 1 件でも存在するか (GSI1 を Limit 1 で引く)。
     ///
     /// 利用者削除時に、物理削除してよいか (記録なし) / 退所扱いにすべきか (記録あり) を

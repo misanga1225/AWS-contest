@@ -163,6 +163,33 @@ pub async fn approve(repo: &dyn Repository, input: ApproveInput) -> Result<CareR
     }
 }
 
+/// 下書き (draft) を削除する。承認済み記録は削除できない (訂正は新規記録として追加する)。
+pub async fn delete_draft(
+    repo: &dyn Repository,
+    floor: &str,
+    created_at: &str,
+    id: &str,
+) -> Result<(), ApiError> {
+    let record = repo
+        .get_record(floor, created_at, id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    if record.status == RecordStatus::Approved {
+        return Err(ApiError::AlreadyApproved);
+    }
+
+    // 条件付き削除で、get→delete の間に承認された場合の競合を原子的に防ぐ。
+    match repo.delete_record_if_draft(floor, created_at, id).await {
+        Ok(()) => {
+            // 監査ログ: 誰が・どのフロアの下書きを削除したか (氏名等のPIIは含めない)。
+            tracing::info!(record_id = %id, floor = %floor, "draft record deleted");
+            Ok(())
+        }
+        Err(RepoError::Conflict) => Err(ApiError::AlreadyApproved),
+        Err(e) => Err(ApiError::Repo(e)),
+    }
+}
+
 /// フロアの記録を条件で絞って時系列 (新しい順) に返す。
 pub async fn list(
     repo: &dyn Repository,

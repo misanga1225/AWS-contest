@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApp } from '../lib/appContext';
-import { currentShift } from '../lib/config';
+import { currentShift, targetDateForShift } from '../lib/config';
 import { useRecords, useResidents, useSummaries, useTriggerSummary } from '../lib/queries';
 import type { CareRecord, HandoverSummary, Priority, Resident, Shift, SummaryItem } from '../types';
 import { PriorityBadge } from '../components/badges';
@@ -19,10 +19,6 @@ import {
 
 const PRIORITY_ORDER: Record<Priority, number> = { attention: 0, change: 1, none: 2 };
 
-function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 export function SummariesPage() {
   const { t } = useTranslation();
   const { floor, config } = useApp();
@@ -35,17 +31,19 @@ export function SummariesPage() {
   // (シフト帯未配信なら day)。職員は必要に応じてセレクタで切り替えられる。
   const [shift, setShift] = useState<Shift>(() => currentShift(config.shiftHours) ?? 'day');
 
-  // 表示するサマリは「本日 + 選択中シフト」に一致するもの。
+  // 表示するサマリは「選択中シフトの対象日 + 選択中シフト」に一致するもの。
   // 全体最新 (data[0]) を出すとシフトを切り替えても表示が変わらず、別シフトを生成した
-  // 瞬間に無関係なサマリへ切り替わってしまう。手動生成が対象とする本日分に揃える。
-  const today = todayStr();
+  // 瞬間に無関係なサマリへ切り替わってしまう。手動生成が対象とする分に揃える。
+  // 夜勤は日をまたぐため「今日」ではなく targetDateForShift で対象日を逆算する
+  // (backend は夜勤サマリを開始日の日付で保存するため)。
+  const targetDate = targetDateForShift(config.shiftHours, shift);
   const selected: HandoverSummary | undefined = summaries.data?.find(
-    (s) => s.date === today && s.shift === shift,
+    (s) => s.date === targetDate && s.shift === shift,
   );
 
   const onGenerate = async () => {
     // force=true: 既存の空/古いサマリをそのまま返さず、最新の承認済み記録から作り直す
-    await trigger.mutateAsync({ floor, date: today, shift, force: true });
+    await trigger.mutateAsync({ floor, date: targetDate, shift, force: true });
   };
 
   const shiftOptions = [
